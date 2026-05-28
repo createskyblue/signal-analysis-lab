@@ -736,7 +736,7 @@ class App {
 
   // ---- Events ----
   initEvents() {
-    // Mouse wheel zoom on canvas
+    // Mouse wheel zoom on canvas - zoom entire viewport
     this.canvasPanel.addEventListener('wheel', (e) => {
       if (e.target.closest('.sidebar') || e.target.closest('.chart-panel')) return;
       e.preventDefault();
@@ -746,29 +746,14 @@ class App {
       const zoomFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
       const oldZoom = this.canvasZoom;
       this.canvasZoom = Math.max(0.2, Math.min(5, this.canvasZoom * zoomFactor));
-      const scale = this.canvasZoom / oldZoom;
-      // Zoom towards mouse position
-      const dx = mouseX - (mouseX - this.panOffset.x) * scale;
-      const dy = mouseY - (mouseY - this.panOffset.y) * scale;
-      // Update node positions
-      for (const node of this.nodes) {
-        node.x = node.x * scale + dx;
-        node.y = node.y * scale + dy;
-        if (node.el) {
-          node.el.style.left = node.x + 'px';
-          node.el.style.top = node.y + 'px';
-          node.el.style.transform = `scale(${this.canvasZoom})`;
-          node.el.style.transformOrigin = 'top left';
-        }
-      }
-      this.panOffset.x += dx;
-      this.panOffset.y += dy;
-      this.drawGrid();
-      this.renderConnections();
+      // Adjust pan offset to zoom towards mouse
+      this.panOffset.x = mouseX - (mouseX - this.panOffset.x) * (this.canvasZoom / oldZoom);
+      this.panOffset.y = mouseY - (mouseY - this.panOffset.y) * (this.canvasZoom / oldZoom);
+      this.applyViewportTransform();
       this.scheduleSave();
     }, { passive: false });
 
-    // Middle mouse button panning - move all nodes by delta
+    // Middle mouse button panning - move viewport
     this.canvasPanel.addEventListener('mousedown', (e) => {
       if (e.button === 1) { // middle button
         e.preventDefault();
@@ -785,17 +770,7 @@ class App {
         this.panStart = { x: e.clientX, y: e.clientY };
         this.panOffset.x += dx;
         this.panOffset.y += dy;
-        // Move all nodes
-        for (const node of this.nodes) {
-          node.x += dx;
-          node.y += dy;
-          if (node.el) {
-            node.el.style.left = node.x + 'px';
-            node.el.style.top = node.y + 'px';
-          }
-        }
-        this.drawGrid();
-        this.renderConnections();
+        this.applyViewportTransform();
       }
       if (this.connecting) {
         const rect = this.canvasPanel.getBoundingClientRect();
@@ -900,6 +875,12 @@ class App {
     this.canvasPanel.addEventListener('contextmenu', (e) => {
       // allow right-click context menu
     });
+  }
+
+  // ---- Viewport Transform ----
+  applyViewportTransform() {
+    this.viewport.style.transform = `translate(${this.panOffset.x}px, ${this.panOffset.y}px) scale(${this.canvasZoom})`;
+    this.viewport.style.transformOrigin = '0 0';
   }
 
   // ---- Node Management ----
@@ -1049,16 +1030,16 @@ class App {
       if (e.target.tagName === 'BUTTON') return;
       e.preventDefault();
       this.draggingNode = node;
-      const rect = el.getBoundingClientRect();
-      this.dragOffset.x = e.clientX - rect.left;
-      this.dragOffset.y = e.clientY - rect.top;
+      const panelRect = this.canvasPanel.getBoundingClientRect();
+      this.dragOffset.x = (e.clientX - panelRect.left - this.panOffset.x) / this.canvasZoom - node.x;
+      this.dragOffset.y = (e.clientY - panelRect.top - this.panOffset.y) / this.canvasZoom - node.y;
       this.selectNode(node.id);
       el.style.zIndex = 20;
 
       const onMove = (ev) => {
         const panelRect = this.canvasPanel.getBoundingClientRect();
-        node.x = ev.clientX - panelRect.left - this.dragOffset.x;
-        node.y = ev.clientY - panelRect.top - this.dragOffset.y;
+        node.x = (ev.clientX - panelRect.left - this.panOffset.x) / this.canvasZoom - this.dragOffset.x;
+        node.y = (ev.clientY - panelRect.top - this.panOffset.y) / this.canvasZoom - this.dragOffset.y;
         el.style.left = node.x + 'px';
         el.style.top = node.y + 'px';
         this.renderConnections();
@@ -1269,21 +1250,9 @@ class App {
   }
 
   resetView() {
-    // Move all nodes back by the pan offset and reset zoom
-    const oldZoom = this.canvasZoom;
-    for (const node of this.nodes) {
-      node.x = (node.x - this.panOffset.x) / oldZoom;
-      node.y = (node.y - this.panOffset.y) / oldZoom;
-      if (node.el) {
-        node.el.style.left = node.x + 'px';
-        node.el.style.top = node.y + 'px';
-        node.el.style.transform = '';
-      }
-    }
     this.panOffset = { x: 0, y: 0 };
     this.canvasZoom = 1;
-    this.drawGrid();
-    this.renderConnections();
+    this.applyViewportTransform();
     this.scheduleSave();
   }
 
@@ -1804,21 +1773,10 @@ class App {
     const panelRect = this.canvasPanel.getBoundingClientRect();
     const cx = panelRect.width / 2;
     const cy = panelRect.height / 2;
-    const dx = cx - node.x - 100; // 100 = half node width
-    const dy = cy - node.y - 60;  // 60 = half node height
-    // Move all nodes
-    for (const n of this.nodes) {
-      n.x += dx;
-      n.y += dy;
-      if (n.el) {
-        n.el.style.left = n.x + 'px';
-        n.el.style.top = n.y + 'px';
-      }
-    }
-    this.panOffset.x += dx;
-    this.panOffset.y += dy;
-    this.drawGrid();
-    this.renderConnections();
+    // Calculate pan offset to center the node
+    this.panOffset.x = cx - (node.x + 100) * this.canvasZoom;
+    this.panOffset.y = cy - (node.y + 60) * this.canvasZoom;
+    this.applyViewportTransform();
     this.selectNode(node.id);
     this.scheduleSave();
   }
@@ -2114,15 +2072,8 @@ class App {
       }
     }
 
-    // Apply zoom to nodes
-    if (this.canvasZoom !== 1) {
-      for (const node of this.nodes) {
-        if (node.el) {
-          node.el.style.transform = `scale(${this.canvasZoom})`;
-          node.el.style.transformOrigin = 'top left';
-        }
-      }
-    }
+    // Apply viewport transform
+    this.applyViewportTransform();
 
     // Restore connections
     this.connections = json.connections || [];
