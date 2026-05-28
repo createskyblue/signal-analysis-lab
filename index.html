@@ -1735,8 +1735,41 @@ class App {
       }
     });
 
+    // Click to navigate to probe node
+    canvas.addEventListener('click', () => {
+      const probeNode = this.nodes.find(n => {
+        if (n.type !== 'probe') return false;
+        const name = n.params.name || `探针 #${n.id}`;
+        return name === title;
+      });
+      if (probeNode) this.focusNode(probeNode);
+    });
+
     container.appendChild(item);
     this.chartDataList.push({ title, data, color, canvas });
+  }
+
+  focusNode(node) {
+    const panelRect = this.canvasPanel.getBoundingClientRect();
+    const cx = panelRect.width / 2;
+    const cy = panelRect.height / 2;
+    const dx = cx - node.x - 100; // 100 = half node width
+    const dy = cy - node.y - 60;  // 60 = half node height
+    // Move all nodes
+    for (const n of this.nodes) {
+      n.x += dx;
+      n.y += dy;
+      if (n.el) {
+        n.el.style.left = n.x + 'px';
+        n.el.style.top = n.y + 'px';
+      }
+    }
+    this.panOffset.x += dx;
+    this.panOffset.y += dy;
+    this.drawGrid();
+    this.renderConnections();
+    this.selectNode(node.id);
+    this.scheduleSave();
   }
 
   initChartEvents() {
