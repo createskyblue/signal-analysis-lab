@@ -426,10 +426,10 @@ const NODE_DEFS = {
   },
   hysteresis: {
     type: 'hysteresis', title: '迟滞比较器',
-    inputs: [{ id: 'in', label: '输入' }],
+    inputs: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B(阈值)' }],
     outputs: [{ id: 'out', label: '输出' }],
     params: [
-      { id: 'threshold', label: '阈值', type: 'number', default: 0.5 },
+      { id: 'threshold', label: '阈值 (B未连接时)', type: 'number', default: 0.5 },
       { id: 'hyst', label: '迟滞 (0=禁用)', type: 'number', default: 0.1 }
     ]
   },
@@ -1434,17 +1434,20 @@ class App {
         break;
       }
       case 'hysteresis': {
-        const inp = this.getUpstreamData(node, 'in');
-        const threshold = node.params.threshold !== undefined ? node.params.threshold : 0.5;
+        const a = this.getUpstreamData(node, 'a');
+        const b = this.getUpstreamData(node, 'b');
+        const defaultThresh = node.params.threshold !== undefined ? node.params.threshold : 0.5;
         const hyst = Math.max(0, node.params.hyst !== undefined ? node.params.hyst : 0.1);
         const out = [];
         let state = 0;
-        for (const v of inp) {
+        for (let i = 0; i < a.length; i++) {
+          const v = a[i] || 0;
+          const t = (b.length > 0 && b[i] !== undefined) ? b[i] : defaultThresh;
           if (hyst === 0) {
-            state = v > threshold ? 1 : 0;
+            state = v > t ? 1 : 0;
           } else {
-            if (state === 0 && v > threshold + hyst) state = 1;
-            else if (state === 1 && v < threshold - hyst) state = 0;
+            if (state === 0 && v > t + hyst) state = 1;
+            else if (state === 1 && v < t - hyst) state = 0;
           }
           out.push(state);
         }
