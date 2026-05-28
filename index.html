@@ -10,7 +10,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 
 /* ========== Layout ========== */
 .app { display: flex; width: 100%; height: 100%; }
-.canvas-panel { flex: 1 1 75%; position: relative; overflow: visible; background: #16213e; }
+.canvas-panel { flex: 1 1 75%; position: relative; overflow: hidden; background: #16213e; }
 .divider { width: 5px; cursor: col-resize; background: #0f3460; transition: background 0.2s; z-index: 100; flex-shrink: 0; }
 .divider:hover, .divider.dragging { background: #e94560; }
 .chart-panel { flex: 1 1 25%; position: relative; background: #1a1a2e; display: flex; flex-direction: column; }
@@ -21,10 +21,10 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .viewport { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: visible; z-index: 1; }
 
 /* ========== Canvas Grid ========== */
-.grid-canvas { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
+.grid-canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
 
 /* ========== SVG Connections ========== */
-.connections-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; overflow: visible; }
+.connections-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
 .connections-svg .conn-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
 .connections-svg .conn-line { fill: none; stroke: #53a8b6; stroke-width: 2.5; pointer-events: none; transition: stroke 0.15s, stroke-width 0.15s; }
 .connections-svg .conn-group:hover .conn-line { stroke: #e94560; stroke-width: 3.5; }
@@ -674,11 +674,15 @@ class App {
 
   // ---- Resize / Grid ----
   resize() {
-    const rect = this.canvasPanel.getBoundingClientRect();
-    this.gridCanvas.width = rect.width * (window.devicePixelRatio || 1);
-    this.gridCanvas.height = rect.height * (window.devicePixelRatio || 1);
-    this.gridCanvas.style.width = rect.width + 'px';
-    this.gridCanvas.style.height = rect.height + 'px';
+    // Make grid canvas very large to cover zoomed out view
+    const size = 10000;
+    const dpr = window.devicePixelRatio || 1;
+    this.gridCanvas.width = size * dpr;
+    this.gridCanvas.height = size * dpr;
+    this.gridCanvas.style.width = size + 'px';
+    this.gridCanvas.style.height = size + 'px';
+    this.gridCanvas.style.left = (-size / 2) + 'px';
+    this.gridCanvas.style.top = (-size / 2) + 'px';
     this.drawGrid();
   }
 
