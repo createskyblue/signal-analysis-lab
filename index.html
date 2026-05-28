@@ -161,25 +161,34 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
       <div class="sidebar-item" onclick="app.addNode('adder')"><span class="dot" style="background:#2ecc71"></span>加法器</div>
       <div class="sidebar-item" onclick="app.addNode('subtractor')"><span class="dot" style="background:#e74c3c"></span>减法器</div>
       <div class="sidebar-item" onclick="app.addNode('inverter')"><span class="dot" style="background:#af7ac5"></span>反相器</div>
-      <div class="sidebar-item" onclick="app.addNode('normalizer')"><span class="dot" style="background:#5dade2"></span>归一化</div>
+      <div class="sidebar-item" onclick="app.addNode('abs')"><span class="dot" style="background:#16a085"></span>绝对值</div>
+      <div class="sidebar-item" onclick="app.addNode('logmultiplier')"><span class="dot" style="background:#2980b9"></span>对数乘法器</div>
     </div>
     <div class="sidebar-group">
-      <div class="sidebar-group-title">池化 / 裁剪</div>
-      <div class="sidebar-item" onclick="app.addNode('cutbeg')"><span class="dot" style="background:#e67e22"></span>Cut Beg</div>
-      <div class="sidebar-item" onclick="app.addNode('cutend')"><span class="dot" style="background:#d35400"></span>Cut End</div>
-      <div class="sidebar-item" onclick="app.addNode('avgwin')"><span class="dot" style="background:#1abc9c"></span>Avg Win</div>
-      <div class="sidebar-item" onclick="app.addNode('avgpool')"><span class="dot" style="background:#16a085"></span>Avg Pool</div>
-      <div class="sidebar-item" onclick="app.addNode('maxpool')"><span class="dot" style="background:#27ae60"></span>Max Pool</div>
+      <div class="sidebar-group-title">信号处理</div>
+      <div class="sidebar-item" onclick="app.addNode('normalizer')"><span class="dot" style="background:#5dade2"></span>归一化</div>
       <div class="sidebar-item" onclick="app.addNode('limiter')"><span class="dot" style="background:#c0392b"></span>限位器</div>
       <div class="sidebar-item" onclick="app.addNode('phaseshifter')"><span class="dot" style="background:#8e44ad"></span>移相器</div>
-      <div class="sidebar-item" onclick="app.addNode('logmultiplier')"><span class="dot" style="background:#2980b9"></span>对数乘法器</div>
-      <div class="sidebar-item" onclick="app.addNode('abs')"><span class="dot" style="background:#16a085"></span>绝对值</div>
       <div class="sidebar-item" onclick="app.addNode('hysteresis')"><span class="dot" style="background:#e74c3c"></span>迟滞比较器</div>
       <div class="sidebar-item" onclick="app.addNode('kalman')"><span class="dot" style="background:#2980b9"></span>卡尔曼滤波</div>
-      <div class="sidebar-item" onclick="app.addNode('medianwin')"><span class="dot" style="background:#8e44ad"></span>中值窗口</div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">窗口统计</div>
+      <div class="sidebar-item" onclick="app.addNode('avgwin')"><span class="dot" style="background:#1abc9c"></span>Avg Win</div>
       <div class="sidebar-item" onclick="app.addNode('maxwin')"><span class="dot" style="background:#c0392b"></span>Max Win</div>
       <div class="sidebar-item" onclick="app.addNode('minwin')"><span class="dot" style="background:#2980b9"></span>Min Win</div>
+      <div class="sidebar-item" onclick="app.addNode('medianwin')"><span class="dot" style="background:#8e44ad"></span>中值窗口</div>
       <div class="sidebar-item" onclick="app.addNode('extremewin')"><span class="dot" style="background:#e67e22"></span>极值窗口</div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">池化降采样</div>
+      <div class="sidebar-item" onclick="app.addNode('avgpool')"><span class="dot" style="background:#16a085"></span>Avg Pool</div>
+      <div class="sidebar-item" onclick="app.addNode('maxpool')"><span class="dot" style="background:#27ae60"></span>Max Pool</div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">裁剪</div>
+      <div class="sidebar-item" onclick="app.addNode('cutbeg')"><span class="dot" style="background:#e67e22"></span>Cut Beg</div>
+      <div class="sidebar-item" onclick="app.addNode('cutend')"><span class="dot" style="background:#d35400"></span>Cut End</div>
     </div>
     <div class="sidebar-group">
       <div class="sidebar-group-title">工具</div>
