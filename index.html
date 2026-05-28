@@ -78,6 +78,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .node-medianwin .node-header { background: linear-gradient(135deg, #6c3483, #8e44ad); }
 .node-maxwin .node-header { background: linear-gradient(135deg, #922b21, #c0392b); }
 .node-minwin .node-header { background: linear-gradient(135deg, #1a5276, #2980b9); }
+.node-extremewin .node-header { background: linear-gradient(135deg, #a04000, #e67e22); }
 .node-probe .node-header { background: linear-gradient(135deg, #c0392b, #e74c3c); }
 
 /* ========== Ports ========== */
@@ -178,6 +179,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
       <div class="sidebar-item" onclick="app.addNode('medianwin')"><span class="dot" style="background:#8e44ad"></span>中值窗口</div>
       <div class="sidebar-item" onclick="app.addNode('maxwin')"><span class="dot" style="background:#c0392b"></span>Max Win</div>
       <div class="sidebar-item" onclick="app.addNode('minwin')"><span class="dot" style="background:#2980b9"></span>Min Win</div>
+      <div class="sidebar-item" onclick="app.addNode('extremewin')"><span class="dot" style="background:#e67e22"></span>极值窗口</div>
     </div>
     <div class="sidebar-group">
       <div class="sidebar-group-title">工具</div>
@@ -469,6 +471,14 @@ const NODE_DEFS = {
   },
   minwin: {
     type: 'minwin', title: 'Min Win',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'size', label: '窗口大小', type: 'number', default: 5 }
+    ]
+  },
+  extremewin: {
+    type: 'extremewin', title: '极值窗口',
     inputs: [{ id: 'in', label: '输入' }],
     outputs: [{ id: 'out', label: '输出' }],
     params: [
@@ -1563,6 +1573,25 @@ class App {
             if (idx >= 0 && idx < inp.length && inp[idx] < min) min = inp[idx];
           }
           out.push(min);
+        }
+        outputs['out'] = out;
+        break;
+      }
+      case 'extremewin': {
+        const inp = this.getUpstreamData(node, 'in');
+        const winSize = Math.max(1, Math.floor(node.params.size || 5));
+        const half = Math.floor(winSize / 2);
+        const out = [];
+        for (let i = 0; i < inp.length; i++) {
+          let extreme = 0, maxAbs = 0;
+          for (let j = -half; j <= half; j++) {
+            const idx = i + j;
+            if (idx >= 0 && idx < inp.length) {
+              const a = Math.abs(inp[idx]);
+              if (a > maxAbs) { maxAbs = a; extreme = inp[idx]; }
+            }
+          }
+          out.push(extreme);
         }
         outputs['out'] = out;
         break;
