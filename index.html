@@ -15,11 +15,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .divider:hover, .divider.dragging { background: #e94560; }
 .chart-panel { flex: 1 1 25%; position: relative; background: #1a1a2e; display: flex; flex-direction: column; }
 
-/* ========== Toolbar ========== */
-.toolbar { position: absolute; top: 10px; left: 10px; z-index: 50; display: flex; gap: 6px; flex-wrap: wrap; }
-.toolbar button { padding: 6px 12px; border: 1px solid #0f3460; border-radius: 6px; background: #16213e; color: #e0e0e0; cursor: pointer; font-size: 12px; transition: all 0.2s; white-space: nowrap; }
-.toolbar button:hover { background: #0f3460; border-color: #e94560; }
-.toolbar button:active { transform: scale(0.96); }
+/* ========== Toolbar (removed - using sidebar) ========== */
 
 /* ========== Viewport ========== */
 .viewport { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: visible; z-index: 1; }
@@ -68,6 +64,12 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .node-subtractor .node-header { background: linear-gradient(135deg, #922b21, #e74c3c); }
 .node-inverter .node-header { background: linear-gradient(135deg, #6c3483, #af7ac5); }
 .node-normalizer .node-header { background: linear-gradient(135deg, #1b4f72, #5dade2); }
+.node-cutbeg .node-header { background: linear-gradient(135deg, #a04000, #e67e22); }
+.node-cutend .node-header { background: linear-gradient(135deg, #935116, #d35400); }
+.node-avgwin .node-header { background: linear-gradient(135deg, #0e6655, #1abc9c); }
+.node-avgpool .node-header { background: linear-gradient(135deg, #0e6251, #16a085); }
+.node-maxpool .node-header { background: linear-gradient(135deg, #1e8449, #27ae60); }
+.node-limiter .node-header { background: linear-gradient(135deg, #922b21, #c0392b); }
 .node-probe .node-header { background: linear-gradient(135deg, #c0392b, #e74c3c); }
 
 /* ========== Ports ========== */
@@ -97,6 +99,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .chart-item-title { font-size: 11px; color: #aaa; margin-bottom: 4px; padding-left: 4px; display: flex; align-items: center; gap: 6px; }
 .chart-item-title .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .chart-item canvas { width: 100%; height: 120px; background: #0d1b2a; border-radius: 6px; border: 1px solid #1b2838; display: block; cursor: crosshair; }
+.chart-item.dragging { opacity: 0.4; }
+.chart-item-title { cursor: grab; }
 
 /* ========== Scrollbar ========== */
 ::-webkit-scrollbar { width: 6px; }
@@ -112,36 +116,73 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .toast-error { background: #e74c3c; color: white; }
 .toast-success { background: #27ae60; color: white; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ========== Sidebar ========== */
+.sidebar { width: 180px; background: #0f1a2e; border-right: 1px solid #1b2838; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+.sidebar-title { padding: 12px 14px 8px; font-size: 14px; font-weight: 700; color: #e0e0e0; border-bottom: 1px solid #1b2838; }
+.sidebar-group { padding: 6px 0; }
+.sidebar-group-title { padding: 4px 14px; font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+.sidebar-item { display: flex; align-items: center; gap: 8px; padding: 7px 14px; cursor: pointer; font-size: 12px; color: #ccc; transition: all 0.15s; }
+.sidebar-item:hover { background: #16213e; color: #fff; }
+.sidebar-item .dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.sidebar-divider { height: 1px; background: #1b2838; margin: 4px 10px; }
+.sidebar-actions { margin-top: auto; padding: 8px; border-top: 1px solid #1b2838; display: flex; flex-direction: column; gap: 4px; }
+.sidebar-actions button { padding: 6px 10px; border: 1px solid #1b2838; border-radius: 5px; background: #16213e; color: #ccc; cursor: pointer; font-size: 11px; transition: all 0.15s; text-align: left; }
+.sidebar-actions button:hover { background: #1a2744; color: #fff; border-color: #2a3f5f; }
 </style>
 </head>
 <body>
 <div class="app">
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-title">信号处理实验室</div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">输入</div>
+      <div class="sidebar-item" onclick="app.addNode('input')"><span class="dot" style="background:#2e86c1"></span>CSV 输入</div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">滤波器</div>
+      <div class="sidebar-item" onclick="app.addNode('lowpass')"><span class="dot" style="background:#a569bd"></span>低通滤波</div>
+      <div class="sidebar-item" onclick="app.addNode('highpass')"><span class="dot" style="background:#bb8fce"></span>高通滤波</div>
+      <div class="sidebar-item" onclick="app.addNode('bandpass')"><span class="dot" style="background:#8e44ad"></span>带通滤波</div>
+      <div class="sidebar-item" onclick="app.addNode('weighted')"><span class="dot" style="background:#7d3c98"></span>加权滤波</div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">运算器</div>
+      <div class="sidebar-item" onclick="app.addNode('multiplier')"><span class="dot" style="background:#2980b9"></span>乘法器</div>
+      <div class="sidebar-item" onclick="app.addNode('adder')"><span class="dot" style="background:#2ecc71"></span>加法器</div>
+      <div class="sidebar-item" onclick="app.addNode('subtractor')"><span class="dot" style="background:#e74c3c"></span>减法器</div>
+      <div class="sidebar-item" onclick="app.addNode('inverter')"><span class="dot" style="background:#af7ac5"></span>反相器</div>
+      <div class="sidebar-item" onclick="app.addNode('normalizer')"><span class="dot" style="background:#5dade2"></span>归一化</div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">池化 / 裁剪</div>
+      <div class="sidebar-item" onclick="app.addNode('cutbeg')"><span class="dot" style="background:#e67e22"></span>Cut Beg</div>
+      <div class="sidebar-item" onclick="app.addNode('cutend')"><span class="dot" style="background:#d35400"></span>Cut End</div>
+      <div class="sidebar-item" onclick="app.addNode('avgwin')"><span class="dot" style="background:#1abc9c"></span>Avg Win</div>
+      <div class="sidebar-item" onclick="app.addNode('avgpool')"><span class="dot" style="background:#16a085"></span>Avg Pool</div>
+      <div class="sidebar-item" onclick="app.addNode('maxpool')"><span class="dot" style="background:#27ae60"></span>Max Pool</div>
+      <div class="sidebar-item" onclick="app.addNode('limiter')"><span class="dot" style="background:#c0392b"></span>限位器</div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">工具</div>
+      <div class="sidebar-item" onclick="app.addNode('splitter')"><span class="dot" style="background:#f39c12"></span>分流器</div>
+      <div class="sidebar-item" onclick="app.addNode('custom')"><span class="dot" style="background:#27ae60"></span>自定义节点</div>
+      <div class="sidebar-item" onclick="app.addNode('probe')"><span class="dot" style="background:#e74c3c"></span>图表探针</div>
+    </div>
+    <div class="sidebar-actions">
+      <button onclick="app.loadDemo()">📊 演示数据</button>
+      <button onclick="app.clearAll()">🗑 清空画布</button>
+      <button onclick="app.exportProject()">💾 导出 JSON</button>
+      <button onclick="document.getElementById('importJson').click()">📂 导入 JSON</button>
+      <input type="file" id="importJson" accept=".json" style="display:none" onchange="app.importProject(event)">
+    </div>
+  </div>
   <div class="canvas-panel" id="canvasPanel">
     <div class="viewport" id="viewport">
       <canvas class="grid-canvas" id="gridCanvas"></canvas>
       <svg class="connections-svg" id="connectionsSvg"></svg>
     </div>
-    <div class="toolbar">
-      <button onclick="app.addNode('input')"> CSV 输入 </button>
-      <button onclick="app.addNode('lowpass')"> 低通滤波 </button>
-      <button onclick="app.addNode('highpass')"> 高通滤波 </button>
-      <button onclick="app.addNode('bandpass')"> 带通滤波 </button>
-      <button onclick="app.addNode('weighted')"> 加权滤波 </button>
-      <button onclick="app.addNode('custom')"> 自定义节点 </button>
-      <button onclick="app.addNode('splitter')"> 分流器 </button>
-      <button onclick="app.addNode('multiplier')"> 乘法器 </button>
-      <button onclick="app.addNode('adder')"> 加法器 </button>
-      <button onclick="app.addNode('subtractor')"> 减法器 </button>
-      <button onclick="app.addNode('inverter')"> 反相器 </button>
-      <button onclick="app.addNode('normalizer')"> 归一化 </button>
-      <button onclick="app.addNode('probe')"> 图表探针 </button>
-      <button onclick="app.clearAll()" style="border-color:#e74c3c;"> 清空画布 </button>
-      <button onclick="app.loadDemo()" style="border-color:#27ae60;"> 演示数据 </button>
-      <button onclick="app.exportProject()" style="border-color:#3498db;"> 导出 JSON </button>
-      <button onclick="document.getElementById('importJson').click()" style="border-color:#3498db;"> 导入 JSON </button>
-      <input type="file" id="importJson" accept=".json" style="display:none" onchange="app.importProject(event)">
-    </div>
-    <div class="empty-hint" id="emptyHint">点击上方按钮添加节点<br>从输出端口 (右侧圆点) 拖拽到输入端口 (左侧圆点) 连线<br>点击连线变红后再点删除 / 右键直接删除<br>按 Delete 键删除选中节点<br>鼠标中键拖拽平移视图 / 空格键复位<br><br>点击「演示数据」可快速体验</div>
+    <div class="empty-hint" id="emptyHint">从左侧栏选择节点添加到画布<br>从输出端口 (右侧圆点) 拖拽到输入端口 (左侧圆点) 连线<br>点击连线变红后再点删除 / 右键直接删除<br>按 Delete 键删除选中节点 / F5 运行<br>鼠标中键拖拽平移视图 / 空格键复位<br><br>点击左下角「演示数据」可快速体验</div>
   </div>
   <div class="divider" id="divider"></div>
   <div class="chart-panel" id="chartPanel">
@@ -154,7 +195,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
           <span style="font-size:11px;color:#aaa;">秒</span>
           <div class="auto-bar-track"><div class="auto-bar-fill" id="autoBarFill"></div></div>
         </div>
-        <button class="run-btn" onclick="app.run()">▶ 运行</button>
+        <button class="run-btn" onclick="app.run()">▶ 运行 (F5)</button>
       </div>
     </div>
     <div class="chart-scroll" id="chartScroll">
@@ -271,6 +312,55 @@ const NODE_DEFS = {
     inputs: [{ id: 'in', label: '输入' }],
     outputs: [{ id: 'out1', label: '输出1' }, { id: 'out2', label: '输出2' }],
     params: []
+  },
+  cutbeg: {
+    type: 'cutbeg', title: 'Cut Beg',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'percent', label: '裁剪比例 (%)', type: 'number', default: 10 }
+    ]
+  },
+  cutend: {
+    type: 'cutend', title: 'Cut End',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'percent', label: '裁剪比例 (%)', type: 'number', default: 10 }
+    ]
+  },
+  avgwin: {
+    type: 'avgwin', title: 'Avg Win',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'size', label: '窗口大小', type: 'number', default: 5 }
+    ]
+  },
+  avgpool: {
+    type: 'avgpool', title: 'Avg Pool',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'size', label: '池化大小', type: 'number', default: 4 }
+    ]
+  },
+  maxpool: {
+    type: 'maxpool', title: 'Max Pool',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'size', label: '池化大小', type: 'number', default: 4 }
+    ]
+  },
+  limiter: {
+    type: 'limiter', title: '限位器',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'min', label: '最小值', type: 'number', default: -1 },
+      { id: 'max', label: '最大值', type: 'number', default: 1 }
+    ]
   },
   multiplier: {
     type: 'multiplier', title: '乘法器',
@@ -1098,6 +1188,67 @@ class App {
         outputs['out'] = range === 0 ? inp.map(() => 0) : inp.map(v => 2 * (v - min) / range - 1);
         break;
       }
+      case 'cutbeg': {
+        const inp = this.getUpstreamData(node, 'in');
+        const pct = Math.max(0, Math.min(100, node.params.percent || 0));
+        const count = Math.floor(inp.length * pct / 100);
+        outputs['out'] = inp.slice(count);
+        break;
+      }
+      case 'cutend': {
+        const inp = this.getUpstreamData(node, 'in');
+        const pct = Math.max(0, Math.min(100, node.params.percent || 0));
+        const count = Math.floor(inp.length * pct / 100);
+        outputs['out'] = inp.slice(0, inp.length - count);
+        break;
+      }
+      case 'avgwin': {
+        const inp = this.getUpstreamData(node, 'in');
+        const winSize = Math.max(1, Math.floor(node.params.size || 5));
+        const half = Math.floor(winSize / 2);
+        const out = [];
+        for (let i = 0; i < inp.length; i++) {
+          let sum = 0, cnt = 0;
+          for (let j = -half; j <= half; j++) {
+            const idx = i + j;
+            if (idx >= 0 && idx < inp.length) { sum += inp[idx]; cnt++; }
+          }
+          out.push(sum / cnt);
+        }
+        outputs['out'] = out;
+        break;
+      }
+      case 'avgpool': {
+        const inp = this.getUpstreamData(node, 'in');
+        const poolSize = Math.max(1, Math.floor(node.params.size || 4));
+        const out = [];
+        for (let i = 0; i < inp.length; i += poolSize) {
+          let sum = 0, cnt = 0;
+          for (let j = 0; j < poolSize && i + j < inp.length; j++) { sum += inp[i + j]; cnt++; }
+          out.push(sum / cnt);
+        }
+        outputs['out'] = out;
+        break;
+      }
+      case 'maxpool': {
+        const inp = this.getUpstreamData(node, 'in');
+        const poolSize = Math.max(1, Math.floor(node.params.size || 4));
+        const out = [];
+        for (let i = 0; i < inp.length; i += poolSize) {
+          let max = -Infinity;
+          for (let j = 0; j < poolSize && i + j < inp.length; j++) { if (inp[i + j] > max) max = inp[i + j]; }
+          out.push(max);
+        }
+        outputs['out'] = out;
+        break;
+      }
+      case 'limiter': {
+        const inp = this.getUpstreamData(node, 'in');
+        const lo = node.params.min !== undefined ? node.params.min : -1;
+        const hi = node.params.max !== undefined ? node.params.max : 1;
+        outputs['out'] = inp.map(v => Math.max(lo, Math.min(hi, v)));
+        break;
+      }
       case 'probe': {
         const inp = this.getUpstreamData(node, 'in');
         const name = node.params.name || `探针 #${node.id}`;
@@ -1134,8 +1285,9 @@ class App {
   // ---- Chart Rendering ----
   renderChart(inputData) {
     this.chartDataList = []; // { title, data, color, canvas }
-    this.chartZoom = 1;
-    this.chartOffset = 0; // 0~1 normalized
+    // Preserve zoom/offset across re-runs
+    if (!this.chartZoom) this.chartZoom = 1;
+    if (!this.chartOffset) this.chartOffset = 0;
     this.cursorX = -1; // -1 = hidden
 
     const container = this.chartScroll;
@@ -1172,14 +1324,51 @@ class App {
   addChartItem(container, title, data, color) {
     const item = document.createElement('div');
     item.className = 'chart-item';
+    item.draggable = true;
     const label = document.createElement('div');
     label.className = 'chart-item-title';
+    label.style.cursor = 'grab';
     label.innerHTML = `<span class="dot" style="background:${color}"></span>${title} (${data.length} 点)`;
     item.appendChild(label);
     const canvas = document.createElement('canvas');
     canvas.style.height = '120px';
     canvas.style.display = 'block';
     item.appendChild(canvas);
+
+    // Drag reorder
+    item.addEventListener('dragstart', (e) => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', '');
+      item.classList.add('dragging');
+      this._dragChartItem = item;
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      this._dragChartItem = null;
+      // Sync chartDataList order with DOM
+      const newOrder = [];
+      for (const child of container.children) {
+        if (child.classList.contains('chart-item')) {
+          const found = this.chartDataList.find(d => d.canvas === child.querySelector('canvas'));
+          if (found) newOrder.push(found);
+        }
+      }
+      this.chartDataList = newOrder;
+    });
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const dragging = this._dragChartItem;
+      if (!dragging || dragging === item) return;
+      const rect = item.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if (e.clientY < mid) {
+        container.insertBefore(dragging, item);
+      } else {
+        container.insertBefore(dragging, item.nextSibling);
+      }
+    });
+
     container.appendChild(item);
     this.chartDataList.push({ title, data, color, canvas });
   }
@@ -1190,6 +1379,11 @@ class App {
     if (this._chartWheel) scroll.removeEventListener('wheel', this._chartWheel);
     if (this._chartMouseMove) scroll.removeEventListener('mousemove', this._chartMouseMove);
     if (this._chartMouseLeave) scroll.removeEventListener('mouseleave', this._chartMouseLeave);
+    if (this._chartMouseDown) scroll.removeEventListener('mousedown', this._chartMouseDown);
+
+    this._chartDragging = false;
+    this._chartDragStart = 0;
+    this._chartDragOffset = 0;
 
     // Zoom with wheel
     this._chartWheel = (e) => {
@@ -1201,7 +1395,6 @@ class App {
       const oldZoom = this.chartZoom;
       this.chartZoom = Math.max(1, Math.min(100, this.chartZoom * zoomFactor));
 
-      // Keep the point under mouse stationary
       const viewW = 1 / oldZoom;
       const viewStart = this.chartOffset;
       const mouseDataPos = viewStart + mouseXRatio * viewW;
@@ -1213,10 +1406,31 @@ class App {
     };
     scroll.addEventListener('wheel', this._chartWheel, { passive: false });
 
-    // Cursor
+    // Middle button drag to pan chart
+    this._chartMouseDown = (e) => {
+      if (e.button === 1) {
+        e.preventDefault();
+        this._chartDragging = true;
+        this._chartDragStart = e.clientX;
+        this._chartDragOffset = this.chartOffset;
+        scroll.style.cursor = 'grabbing';
+      }
+    };
+    scroll.addEventListener('mousedown', this._chartMouseDown);
+
+    // Cursor + drag
     this._chartMouseMove = (e) => {
       const rect = scroll.getBoundingClientRect();
       this.cursorX = e.clientX - rect.left;
+
+      if (this._chartDragging) {
+        const dx = e.clientX - this._chartDragStart;
+        const dataPerPx = (1 / this.chartZoom) / rect.width;
+        const newOffset = this._chartDragOffset - dx * dataPerPx;
+        const viewW = 1 / this.chartZoom;
+        this.chartOffset = Math.max(0, Math.min(1 - viewW, newOffset));
+      }
+
       this.redrawCharts();
       this.updateCursorReadout();
     };
@@ -1224,10 +1438,23 @@ class App {
 
     this._chartMouseLeave = () => {
       this.cursorX = -1;
+      if (this._chartDragging) {
+        this._chartDragging = false;
+        scroll.style.cursor = '';
+      }
       this.redrawCharts();
       if (this.cursorReadout) this.cursorReadout.textContent = '';
     };
     scroll.addEventListener('mouseleave', this._chartMouseLeave);
+
+    // Stop drag on mouseup
+    this._chartMouseUp = (e) => {
+      if (e.button === 1 && this._chartDragging) {
+        this._chartDragging = false;
+        scroll.style.cursor = '';
+      }
+    };
+    document.addEventListener('mouseup', this._chartMouseUp);
   }
 
   updateCursorReadout() {
@@ -1429,6 +1656,8 @@ class App {
 
     // Restore connections
     this.connections = json.connections || [];
+    // Update all port positions before rendering connections
+    for (const node of this.nodes) this.updatePortPositions(node);
     this.renderConnections();
     this.resize();
     this.updateEmptyHint();
