@@ -70,6 +70,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .node-avgpool .node-header { background: linear-gradient(135deg, #0e6251, #16a085); }
 .node-maxpool .node-header { background: linear-gradient(135deg, #1e8449, #27ae60); }
 .node-limiter .node-header { background: linear-gradient(135deg, #922b21, #c0392b); }
+.node-phaseshifter .node-header { background: linear-gradient(135deg, #6c3483, #8e44ad); }
 .node-probe .node-header { background: linear-gradient(135deg, #c0392b, #e74c3c); }
 
 /* ========== Ports ========== */
@@ -162,6 +163,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
       <div class="sidebar-item" onclick="app.addNode('avgpool')"><span class="dot" style="background:#16a085"></span>Avg Pool</div>
       <div class="sidebar-item" onclick="app.addNode('maxpool')"><span class="dot" style="background:#27ae60"></span>Max Pool</div>
       <div class="sidebar-item" onclick="app.addNode('limiter')"><span class="dot" style="background:#c0392b"></span>限位器</div>
+      <div class="sidebar-item" onclick="app.addNode('phaseshifter')"><span class="dot" style="background:#8e44ad"></span>移相器</div>
     </div>
     <div class="sidebar-group">
       <div class="sidebar-group-title">工具</div>
@@ -394,12 +396,21 @@ const NODE_DEFS = {
     outputs: [{ id: 'out', label: '输出' }],
     params: []
   },
+  phaseshifter: {
+    type: 'phaseshifter', title: '移相器',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'shift', label: '偏移点数 (负=左移, 正=右移)', type: 'number', default: 10 }
+    ]
+  },
   probe: {
     type: 'probe', title: '图表探针',
     inputs: [{ id: 'in', label: '输入' }],
     outputs: [],
     params: [
-      { id: 'name', label: '探针名称', type: 'text', default: '' }
+      { id: 'name', label: '探针名称', type: 'text', default: '' },
+      { id: 'color', label: '颜色', type: 'color', default: '' }
     ]
   }
 };
@@ -440,6 +451,11 @@ class App {
   }
 
   // ---- Toast ----
+  randomColor() {
+    const hue = Math.floor(Math.random() * 360);
+    return `hsl(${hue}, 70%, 55%)`;
+  }
+
   toast(msg, type = 'info') {
     const el = document.createElement('div');
     el.className = `toast toast-${type}`;
@@ -745,6 +761,17 @@ class App {
         inp.value = node.params[p.id];
         inp.min = 1;
         inp.onchange = () => { node.params[p.id] = parseFloat(inp.value) || 0; this.scheduleSave(); };
+        body.appendChild(inp);
+      } else if (p.type === 'color') {
+        const inp = document.createElement('input');
+        inp.type = 'color';
+        inp.value = node.params[p.id] || this.randomColor();
+        if (!node.params[p.id]) node.params[p.id] = inp.value;
+        inp.style.width = '100%';
+        inp.style.height = '28px';
+        inp.style.border = 'none';
+        inp.style.cursor = 'pointer';
+        inp.oninput = () => { node.params[p.id] = inp.value; this.scheduleSave(); };
         body.appendChild(inp);
       } else {
         const inp = document.createElement('input');
@@ -1249,10 +1276,26 @@ class App {
         outputs['out'] = inp.map(v => Math.max(lo, Math.min(hi, v)));
         break;
       }
+      case 'phaseshifter': {
+        const inp = this.getUpstreamData(node, 'in');
+        const shift = Math.floor(node.params.shift || 0);
+        if (shift === 0) {
+          outputs['out'] = [...inp];
+        } else if (shift > 0) {
+          // Right shift: pad with zeros at start
+          outputs['out'] = [...new Array(shift).fill(0), ...inp.slice(0, inp.length - shift)];
+        } else {
+          // Left shift: pad with zeros at end
+          const s = -shift;
+          outputs['out'] = [...inp.slice(s), ...new Array(s).fill(0)];
+        }
+        break;
+      }
       case 'probe': {
         const inp = this.getUpstreamData(node, 'in');
         const name = node.params.name || `探针 #${node.id}`;
-        this.probeData.set(name, inp);
+        const color = node.params.color || this.randomColor();
+        this.probeData.set(name, { data: inp, color });
         break;
       }
     }
@@ -1297,12 +1340,18 @@ class App {
       this.addChartItem(container, '输入信号', inputData, '#2e86c1');
     }
 
-    const colors = ['#e74c3c', '#27ae60', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#3498db'];
-    let ci = 0;
-    for (const [name, data] of this.probeData) {
+    // Reorder probes based on saved order
+    let orderedProbes = [...this.probeData.entries()];
+    if (this._savedChartOrder && this._savedChartOrder.length > 0) {
+      orderedProbes.sort((a, b) => {
+        const ia = this._savedChartOrder.indexOf(a[0]);
+        const ib = this._savedChartOrder.indexOf(b[0]);
+        return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+      });
+    }
+    for (const [name, { data, color }] of orderedProbes) {
       if (data.length > 0) {
-        this.addChartItem(container, name, data, colors[ci % colors.length]);
-        ci++;
+        this.addChartItem(container, name, data, color);
       }
     }
 
@@ -1354,6 +1403,9 @@ class App {
         }
       }
       this.chartDataList = newOrder;
+      // Save order for persistence
+      this._savedChartOrder = newOrder.map(d => d.title);
+      this.scheduleSave();
     });
     item.addEventListener('dragover', (e) => {
       e.preventDefault();
@@ -1591,11 +1643,14 @@ class App {
 
   serialize() {
     return {
-      version: 4,
+      version: 5,
       nodeIdCounter,
       sampleRate: this.sampleRate,
       panOffset: { ...this.panOffset },
       autoInterval: parseFloat(document.getElementById('autoInterval').value) || 2,
+      chartZoom: this.chartZoom || 1,
+      chartOffset: this.chartOffset || 0,
+      chartOrder: this.chartDataList ? this.chartDataList.map(d => d.title) : [],
       panelFlex: {
         left: this.canvasPanel.style.flex || '',
         right: document.getElementById('chartPanel').style.flex || ''
@@ -1627,6 +1682,11 @@ class App {
     if (json.autoInterval) {
       document.getElementById('autoInterval').value = json.autoInterval;
     }
+
+    // Restore chart zoom/offset
+    this.chartZoom = json.chartZoom || 1;
+    this.chartOffset = json.chartOffset || 0;
+    this._savedChartOrder = json.chartOrder || [];
 
     // Restore pan offset
     this.panOffset = json.panOffset ? { x: json.panOffset.x || 0, y: json.panOffset.y || 0 } : { x: 0, y: 0 };
@@ -1720,8 +1780,9 @@ class App {
 // ---- Init ----
 const app = new App();
 // Auto-load saved project, or show hint
-if (!app.loadFromLocal()) {
-  // No saved project, leave empty
+if (app.loadFromLocal()) {
+  // Auto-run after loading
+  setTimeout(() => app.run(), 100);
 }
 </script>
 </body>
