@@ -74,6 +74,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .node-logmultiplier .node-header { background: linear-gradient(135deg, #1a5276, #2980b9); }
 .node-abs .node-header { background: linear-gradient(135deg, #0e6655, #16a085); }
 .node-hysteresis .node-header { background: linear-gradient(135deg, #922b21, #e74c3c); }
+.node-kalman .node-header { background: linear-gradient(135deg, #1a5276, #2980b9); }
 .node-probe .node-header { background: linear-gradient(135deg, #c0392b, #e74c3c); }
 
 /* ========== Ports ========== */
@@ -170,6 +171,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
       <div class="sidebar-item" onclick="app.addNode('logmultiplier')"><span class="dot" style="background:#2980b9"></span>对数乘法器</div>
       <div class="sidebar-item" onclick="app.addNode('abs')"><span class="dot" style="background:#16a085"></span>绝对值</div>
       <div class="sidebar-item" onclick="app.addNode('hysteresis')"><span class="dot" style="background:#e74c3c"></span>迟滞比较器</div>
+      <div class="sidebar-item" onclick="app.addNode('kalman')"><span class="dot" style="background:#2980b9"></span>卡尔曼滤波</div>
     </div>
     <div class="sidebar-group">
       <div class="sidebar-group-title">工具</div>
@@ -431,6 +433,16 @@ const NODE_DEFS = {
     params: [
       { id: 'threshold', label: '阈值 (B未连接时)', type: 'number', default: 0.5 },
       { id: 'hyst', label: '迟滞 (0=禁用)', type: 'number', default: 0.1 }
+    ]
+  },
+  kalman: {
+    type: 'kalman', title: '卡尔曼滤波',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'q', label: '过程噪声 Q', type: 'number', default: 0.01 },
+      { id: 'r', label: '测量噪声 R', type: 'number', default: 0.1 },
+      { id: '_info', label: '', type: 'info', default: 'x̂ = x̂ + K(z-x̂), K=P/(P+R)' }
     ]
   },
   probe: {
@@ -1450,6 +1462,26 @@ class App {
             else if (state === 1 && v < t - hyst) state = 0;
           }
           out.push(state);
+        }
+        outputs['out'] = out;
+        break;
+      }
+      case 'kalman': {
+        const inp = this.getUpstreamData(node, 'in');
+        const Q = node.params.q !== undefined ? node.params.q : 0.01;
+        const R = node.params.r !== undefined ? node.params.r : 0.1;
+        const out = [];
+        let x_est = inp.length > 0 ? inp[0] : 0; // initial estimate
+        let p_est = 1; // initial error covariance
+        for (const z of inp) {
+          // Predict
+          const x_pred = x_est;
+          const p_pred = p_est + Q;
+          // Update
+          const K = p_pred / (p_pred + R);
+          x_est = x_pred + K * (z - x_pred);
+          p_est = (1 - K) * p_pred;
+          out.push(x_est);
         }
         outputs['out'] = out;
         break;
