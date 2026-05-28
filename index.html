@@ -412,7 +412,9 @@ const NODE_DEFS = {
     type: 'logmultiplier', title: '对数乘法器',
     inputs: [{ id: 'in', label: '输入' }],
     outputs: [{ id: 'out', label: '输出' }],
-    params: []
+    params: [
+      { id: '_info', label: '', type: 'info', default: 'out = x·log(1+|x|)/log(1+max)' }
+    ]
   },
   abs: {
     type: 'abs', title: '绝对值',
@@ -877,6 +879,11 @@ class App {
         inp.style.cursor = 'pointer';
         inp.oninput = () => { node.params[p.id] = inp.value; this.scheduleSave(); };
         body.appendChild(inp);
+      } else if (p.type === 'info') {
+        const div = document.createElement('div');
+        div.style.cssText = 'font-size:10px;color:#888;font-family:Consolas,monospace;padding:2px 0;white-space:nowrap;';
+        div.textContent = p.default;
+        body.appendChild(div);
       } else {
         const inp = document.createElement('input');
         inp.type = 'text';
