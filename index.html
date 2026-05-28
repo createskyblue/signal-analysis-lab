@@ -538,6 +538,7 @@ class App {
     this.panning = false;
     this.panStart = { x: 0, y: 0 };
     this.panOffset = { x: 0, y: 0 };
+    this.canvasZoom = 1;
 
     this.initDivider();
     this.initEvents();
@@ -735,6 +736,38 @@ class App {
 
   // ---- Events ----
   initEvents() {
+    // Mouse wheel zoom on canvas
+    this.canvasPanel.addEventListener('wheel', (e) => {
+      if (e.target.closest('.sidebar') || e.target.closest('.chart-panel')) return;
+      e.preventDefault();
+      const rect = this.canvasPanel.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      const zoomFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      const oldZoom = this.canvasZoom;
+      this.canvasZoom = Math.max(0.2, Math.min(5, this.canvasZoom * zoomFactor));
+      const scale = this.canvasZoom / oldZoom;
+      // Zoom towards mouse position
+      const dx = mouseX - (mouseX - this.panOffset.x) * scale;
+      const dy = mouseY - (mouseY - this.panOffset.y) * scale;
+      // Update node positions
+      for (const node of this.nodes) {
+        node.x = node.x * scale + dx;
+        node.y = node.y * scale + dy;
+        if (node.el) {
+          node.el.style.left = node.x + 'px';
+          node.el.style.top = node.y + 'px';
+          node.el.style.transform = `scale(${this.canvasZoom})`;
+          node.el.style.transformOrigin = 'top left';
+        }
+      }
+      this.panOffset.x += dx;
+      this.panOffset.y += dy;
+      this.drawGrid();
+      this.renderConnections();
+      this.scheduleSave();
+    }, { passive: false });
+
     // Middle mouse button panning - move all nodes by delta
     this.canvasPanel.addEventListener('mousedown', (e) => {
       if (e.button === 1) { // middle button
@@ -1236,16 +1269,19 @@ class App {
   }
 
   resetView() {
-    // Move all nodes back by the pan offset
+    // Move all nodes back by the pan offset and reset zoom
+    const oldZoom = this.canvasZoom;
     for (const node of this.nodes) {
-      node.x -= this.panOffset.x;
-      node.y -= this.panOffset.y;
+      node.x = (node.x - this.panOffset.x) / oldZoom;
+      node.y = (node.y - this.panOffset.y) / oldZoom;
       if (node.el) {
         node.el.style.left = node.x + 'px';
         node.el.style.top = node.y + 'px';
+        node.el.style.transform = '';
       }
     }
     this.panOffset = { x: 0, y: 0 };
+    this.canvasZoom = 1;
     this.drawGrid();
     this.renderConnections();
     this.scheduleSave();
@@ -2009,6 +2045,7 @@ class App {
       nodeIdCounter,
       sampleRate: this.sampleRate,
       panOffset: { ...this.panOffset },
+      canvasZoom: this.canvasZoom || 1,
       autoInterval: parseFloat(document.getElementById('autoInterval').value) || 2,
       chartZoom: this.chartZoom || 1,
       chartOffset: this.chartOffset || 0,
@@ -2050,8 +2087,9 @@ class App {
     this.chartOffset = json.chartOffset || 0;
     this._savedChartOrder = json.chartOrder || [];
 
-    // Restore pan offset
+    // Restore pan offset and zoom
     this.panOffset = json.panOffset ? { x: json.panOffset.x || 0, y: json.panOffset.y || 0 } : { x: 0, y: 0 };
+    this.canvasZoom = json.canvasZoom || 1;
 
     // Restore panel sizes
     if (json.panelFlex) {
@@ -2073,6 +2111,16 @@ class App {
       if (nd.data && nd.type === 'input') {
         const lbl = document.getElementById(`fileLabel-${node.id}`);
         if (lbl) lbl.textContent = `已加载 ${nd.data.length} 点`;
+      }
+    }
+
+    // Apply zoom to nodes
+    if (this.canvasZoom !== 1) {
+      for (const node of this.nodes) {
+        if (node.el) {
+          node.el.style.transform = `scale(${this.canvasZoom})`;
+          node.el.style.transformOrigin = 'top left';
+        }
       }
     }
 
