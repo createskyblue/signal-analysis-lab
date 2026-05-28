@@ -391,23 +391,27 @@ const NODE_DEFS = {
   },
   multiplier: {
     type: 'multiplier', title: '乘法器',
-    inputs: [{ id: 'in', label: '输入' }],
+    inputs: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }],
     outputs: [{ id: 'out', label: '输出' }],
     params: [
-      { id: 'factor', label: '乘数', type: 'number', default: 2 }
+      { id: 'value', label: 'B值 (B未连接时)', type: 'number', default: 2 }
     ]
   },
   adder: {
     type: 'adder', title: '加法器',
     inputs: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }],
     outputs: [{ id: 'out', label: '输出' }],
-    params: []
+    params: [
+      { id: 'value', label: 'B值 (B未连接时)', type: 'number', default: 0 }
+    ]
   },
   subtractor: {
     type: 'subtractor', title: '减法器',
     inputs: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }],
     outputs: [{ id: 'out', label: '输出' }],
-    params: []
+    params: [
+      { id: 'value', label: 'B值 (B未连接时)', type: 'number', default: 0 }
+    ]
   },
   inverter: {
     type: 'inverter', title: '反相器',
@@ -1368,26 +1372,32 @@ class App {
         break;
       }
       case 'multiplier': {
-        const inp = this.getUpstreamData(node, 'in');
-        const factor = node.params.factor !== undefined ? node.params.factor : 2;
-        outputs['out'] = inp.map(v => v * factor);
+        const a = this.getUpstreamData(node, 'a');
+        const b = this.getUpstreamData(node, 'b');
+        const defaultB = node.params.value !== undefined ? node.params.value : 2;
+        const len = a.length;
+        const out = [];
+        for (let i = 0; i < len; i++) out.push((a[i] || 0) * (b.length > 0 && b[i] !== undefined ? b[i] : defaultB));
+        outputs['out'] = out;
         break;
       }
       case 'adder': {
         const a = this.getUpstreamData(node, 'a');
         const b = this.getUpstreamData(node, 'b');
-        const len = Math.max(a.length, b.length);
+        const defaultB = node.params.value !== undefined ? node.params.value : 0;
+        const len = a.length;
         const out = [];
-        for (let i = 0; i < len; i++) out.push((a[i] || 0) + (b[i] || 0));
+        for (let i = 0; i < len; i++) out.push((a[i] || 0) + (b.length > 0 && b[i] !== undefined ? b[i] : defaultB));
         outputs['out'] = out;
         break;
       }
       case 'subtractor': {
         const a = this.getUpstreamData(node, 'a');
         const b = this.getUpstreamData(node, 'b');
-        const len = Math.max(a.length, b.length);
+        const defaultB = node.params.value !== undefined ? node.params.value : 0;
+        const len = a.length;
         const out = [];
-        for (let i = 0; i < len; i++) out.push((a[i] || 0) - (b[i] || 0));
+        for (let i = 0; i < len; i++) out.push((a[i] || 0) - (b.length > 0 && b[i] !== undefined ? b[i] : defaultB));
         outputs['out'] = out;
         break;
       }
