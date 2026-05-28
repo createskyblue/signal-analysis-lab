@@ -24,7 +24,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .grid-canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
 
 /* ========== SVG Connections ========== */
-.connections-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+.connections-svg { position: absolute; left: -5000px; top: -5000px; width: 10000px; height: 10000px; pointer-events: none; z-index: 5; }
 .connections-svg .conn-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
 .connections-svg .conn-line { fill: none; stroke: #53a8b6; stroke-width: 2.5; pointer-events: none; transition: stroke 0.15s, stroke-width 0.15s; }
 .connections-svg .conn-group:hover .conn-line { stroke: #e94560; stroke-width: 3.5; }
@@ -1203,22 +1203,24 @@ class App {
 
   // ---- Connections ----
   startConnection(fromNodeId, fromPortId, portEl) {
-    const rect = this.canvasPanel.getBoundingClientRect();
-    const portRect = portEl.getBoundingClientRect();
+    const node = this.nodes.find(n => n.id === fromNodeId);
+    const port = portEl;
     const tempPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     tempPath.classList.add('temp');
     this.svg.appendChild(tempPath);
+    // Use viewport coordinates + SVG offset
     this.connecting = {
       fromNodeId, fromPortId,
-      startX: portRect.left - rect.left + portRect.width / 2,
-      startY: portRect.top - rect.top + portRect.height / 2,
+      startX: node.x + port.offsetLeft + 7 + 5000,
+      startY: node.y + port.offsetTop + 7 + 5000,
       tempPath
     };
   }
 
   drawTempConnection(mx, my) {
     if (!this.connecting) return;
-    this.connecting.tempPath.setAttribute('d', this.bezierPath(this.connecting.startX, this.connecting.startY, mx, my));
+    // Convert viewport coordinates to SVG coordinates
+    this.connecting.tempPath.setAttribute('d', this.bezierPath(this.connecting.startX, this.connecting.startY, mx + 5000, my + 5000));
   }
 
   finishConnection(toNodeId, toPortId) {
@@ -1246,10 +1248,10 @@ class App {
     if (!node || !node.el) return { x: 0, y: 0 };
     const port = node.el.querySelector(`.port[data-node-id="${nodeId}"][data-port-id="${portId}"]`);
     if (!port) return { x: 0, y: 0 };
-    // Position relative to the viewport's local coordinate system
+    // Position in SVG coordinate system (SVG is offset by -5000)
     return {
-      x: node.x + port.offsetLeft + 7,
-      y: node.y + port.offsetTop + 7
+      x: node.x + port.offsetLeft + 7 + 5000,
+      y: node.y + port.offsetTop + 7 + 5000
     };
   }
 
