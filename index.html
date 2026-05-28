@@ -412,9 +412,7 @@ const NODE_DEFS = {
     type: 'logmultiplier', title: '对数乘法器',
     inputs: [{ id: 'in', label: '输入' }],
     outputs: [{ id: 'out', label: '输出' }],
-    params: [
-      { id: 'factor', label: '压缩系数', type: 'number', default: 10 }
-    ]
+    params: []
   },
   abs: {
     type: 'abs', title: '绝对值',
@@ -1404,8 +1402,12 @@ class App {
       }
       case 'logmultiplier': {
         const inp = this.getUpstreamData(node, 'in');
-        const factor = node.params.factor !== undefined ? node.params.factor : 10;
-        outputs['out'] = inp.map(v => Math.sign(v) * Math.log(1 + Math.abs(v) * factor) / Math.log(1 + factor));
+        if (!inp.length) { outputs['out'] = []; break; }
+        let max = 0;
+        for (const v of inp) { const a = Math.abs(v); if (a > max) max = a; }
+        if (max === 0) { outputs['out'] = [...inp]; break; }
+        const logMax = Math.log(1 + max);
+        outputs['out'] = inp.map(v => v * Math.log(1 + Math.abs(v)) / logMax);
         break;
       }
       case 'abs': {
