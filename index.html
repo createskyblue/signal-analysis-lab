@@ -1,0 +1,1499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>信号处理实验室</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #1a1a2e; color: #e0e0e0; }
+
+/* ========== Layout ========== */
+.app { display: flex; width: 100%; height: 100%; }
+.canvas-panel { flex: 1 1 75%; position: relative; overflow: hidden; background: #16213e; }
+.divider { width: 5px; cursor: col-resize; background: #0f3460; transition: background 0.2s; z-index: 100; flex-shrink: 0; }
+.divider:hover, .divider.dragging { background: #e94560; }
+.chart-panel { flex: 1 1 25%; position: relative; background: #1a1a2e; display: flex; flex-direction: column; }
+
+/* ========== Toolbar ========== */
+.toolbar { position: absolute; top: 10px; left: 10px; z-index: 50; display: flex; gap: 6px; flex-wrap: wrap; }
+.toolbar button { padding: 6px 12px; border: 1px solid #0f3460; border-radius: 6px; background: #16213e; color: #e0e0e0; cursor: pointer; font-size: 12px; transition: all 0.2s; white-space: nowrap; }
+.toolbar button:hover { background: #0f3460; border-color: #e94560; }
+.toolbar button:active { transform: scale(0.96); }
+
+/* ========== Viewport ========== */
+.viewport { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: visible; z-index: 1; }
+
+/* ========== Canvas Grid ========== */
+.grid-canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
+
+/* ========== SVG Connections ========== */
+.connections-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+.connections-svg .conn-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
+.connections-svg .conn-line { fill: none; stroke: #53a8b6; stroke-width: 2.5; pointer-events: none; transition: stroke 0.15s, stroke-width 0.15s; }
+.connections-svg .conn-group:hover .conn-line { stroke: #e94560; stroke-width: 3.5; }
+.connections-svg .conn-group.deleting .conn-line { stroke: #e94560; stroke-width: 3.5; stroke-dasharray: 6 3; }
+.connections-svg path.temp { fill: none; stroke: #e94560; stroke-dasharray: 8 4; stroke-width: 2; pointer-events: none; }
+
+/* ========== Nodes ========== */
+.node { position: absolute; min-width: 200px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); z-index: 10; user-select: none; }
+.node:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.6); }
+.node.selected { box-shadow: 0 0 0 2px #e94560, 0 6px 20px rgba(0,0,0,0.6); }
+.node-header { padding: 8px 12px; border-radius: 10px 10px 0 0; cursor: move; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.node-body { padding: 10px 12px; background: #1e2a4a; border-radius: 0 0 10px 10px; }
+.node-body label { font-size: 11px; color: #aaa; display: block; margin-bottom: 3px; }
+.node-body input, .node-body select { width: 100%; padding: 4px 8px; border: 1px solid #333; border-radius: 4px; background: #16213e; color: #e0e0e0; font-size: 12px; margin-bottom: 6px; }
+.node-body textarea { width: 100%; padding: 6px 8px; border: 1px solid #333; border-radius: 4px; background: #16213e; color: #e0e0e0; font-size: 11px; font-family: 'Consolas', monospace; resize: vertical; min-height: 60px; margin-bottom: 6px; }
+.node-body input:focus, .node-body textarea:focus, .node-body select:focus { outline: none; border-color: #53a8b6; }
+.node-body .file-upload { position: relative; overflow: hidden; display: inline-block; width: 100%; }
+.node-body .file-upload input[type="file"] { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.node-body .file-btn { padding: 5px 10px; background: #0f3460; border-radius: 4px; font-size: 11px; color: #e0e0e0; display: block; cursor: pointer; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node-body .file-btn:hover { background: #1a5276; }
+.node-delete { position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; border-radius: 50%; background: #e94560; color: white; border: none; cursor: pointer; font-size: 12px; line-height: 20px; text-align: center; z-index: 20; display: none; }
+.node:hover .node-delete { display: block; }
+.node-body .param-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.node-body .param-row label { margin-bottom: 0; white-space: nowrap; }
+.node-body .param-row input { margin-bottom: 0; flex: 1; }
+
+/* Node type colors */
+.node-input .node-header { background: linear-gradient(135deg, #1a5276, #2e86c1); }
+.node-lowpass .node-header { background: linear-gradient(135deg, #6c3483, #a569bd); }
+.node-highpass .node-header { background: linear-gradient(135deg, #7d3c98, #bb8fce); }
+.node-bandpass .node-header { background: linear-gradient(135deg, #5b2c6f, #8e44ad); }
+.node-weighted .node-header { background: linear-gradient(135deg, #4a235a, #7d3c98); }
+.node-custom .node-header { background: linear-gradient(135deg, #1e8449, #27ae60); }
+.node-splitter .node-header { background: linear-gradient(135deg, #b9770e, #f39c12); }
+.node-multiplier .node-header { background: linear-gradient(135deg, #1a5276, #2980b9); }
+.node-adder .node-header { background: linear-gradient(135deg, #196f3d, #2ecc71); }
+.node-subtractor .node-header { background: linear-gradient(135deg, #922b21, #e74c3c); }
+.node-inverter .node-header { background: linear-gradient(135deg, #6c3483, #af7ac5); }
+.node-normalizer .node-header { background: linear-gradient(135deg, #1b4f72, #5dade2); }
+.node-probe .node-header { background: linear-gradient(135deg, #c0392b, #e74c3c); }
+
+/* ========== Ports ========== */
+.port { position: absolute; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #53a8b6; background: #1a1a2e; cursor: crosshair; z-index: 15; transition: all 0.15s; }
+.port:hover { transform: scale(1.5); background: #53a8b6; box-shadow: 0 0 8px #53a8b6; }
+.port-in { left: -7px; }
+.port-out { right: -7px; }
+.port-label { position: absolute; font-size: 10px; color: #888; white-space: nowrap; top: -1px; pointer-events: none; }
+.port-in .port-label { left: 18px; }
+.port-out .port-label { right: 18px; }
+
+/* ========== Chart Panel ========== */
+.chart-header { padding: 10px 12px; font-size: 14px; font-weight: 600; background: #0f3460; border-bottom: 1px solid #1a1a2e; display: flex; align-items: center; justify-content: space-between; }
+.chart-header .run-btn { padding: 5px 16px; background: #27ae60; border: none; border-radius: 5px; color: white; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s; }
+.chart-header .run-btn:hover { background: #2ecc71; }
+.chart-header .run-btn:active { transform: scale(0.96); }
+.auto-run-wrap { display: flex; align-items: center; gap: 5px; background: #0a1929; border-radius: 5px; padding: 3px 8px 3px 3px; }
+.auto-btn { padding: 4px 10px !important; font-size: 13px !important; }
+.auto-btn.active { background: #e67e22 !important; animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.7; } }
+.auto-interval { width: 42px; padding: 3px 4px; border: 1px solid #333; border-radius: 3px; background: #16213e; color: #e0e0e0; font-size: 11px; text-align: center; }
+.auto-interval:focus { outline: none; border-color: #53a8b6; }
+.auto-bar-track { width: 50px; height: 4px; background: #1b2838; border-radius: 2px; overflow: hidden; }
+.auto-bar-fill { width: 0%; height: 100%; background: #e67e22; border-radius: 2px; transition: width 0.1s linear; }
+.chart-scroll { flex: 1; overflow-y: auto; padding: 8px; }
+.chart-item { margin-bottom: 12px; }
+.chart-item-title { font-size: 11px; color: #aaa; margin-bottom: 4px; padding-left: 4px; display: flex; align-items: center; gap: 6px; }
+.chart-item-title .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.chart-item canvas { width: 100%; height: 120px; background: #0d1b2a; border-radius: 6px; border: 1px solid #1b2838; display: block; cursor: crosshair; }
+
+/* ========== Scrollbar ========== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #1a1a2e; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+/* ========== Empty state ========== */
+.empty-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #444; font-size: 14px; pointer-events: none; line-height: 2; }
+
+/* ========== Toast ========== */
+.toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 20px; border-radius: 6px; font-size: 13px; z-index: 9999; animation: fadeIn 0.3s; }
+.toast-info { background: #2e86c1; color: white; }
+.toast-error { background: #e74c3c; color: white; }
+.toast-success { background: #27ae60; color: white; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="canvas-panel" id="canvasPanel">
+    <div class="viewport" id="viewport">
+      <canvas class="grid-canvas" id="gridCanvas"></canvas>
+      <svg class="connections-svg" id="connectionsSvg"></svg>
+    </div>
+    <div class="toolbar">
+      <button onclick="app.addNode('input')"> CSV 输入 </button>
+      <button onclick="app.addNode('lowpass')"> 低通滤波 </button>
+      <button onclick="app.addNode('highpass')"> 高通滤波 </button>
+      <button onclick="app.addNode('bandpass')"> 带通滤波 </button>
+      <button onclick="app.addNode('weighted')"> 加权滤波 </button>
+      <button onclick="app.addNode('custom')"> 自定义节点 </button>
+      <button onclick="app.addNode('splitter')"> 分流器 </button>
+      <button onclick="app.addNode('multiplier')"> 乘法器 </button>
+      <button onclick="app.addNode('adder')"> 加法器 </button>
+      <button onclick="app.addNode('subtractor')"> 减法器 </button>
+      <button onclick="app.addNode('inverter')"> 反相器 </button>
+      <button onclick="app.addNode('normalizer')"> 归一化 </button>
+      <button onclick="app.addNode('probe')"> 图表探针 </button>
+      <button onclick="app.clearAll()" style="border-color:#e74c3c;"> 清空画布 </button>
+      <button onclick="app.loadDemo()" style="border-color:#27ae60;"> 演示数据 </button>
+      <button onclick="app.exportProject()" style="border-color:#3498db;"> 导出 JSON </button>
+      <button onclick="document.getElementById('importJson').click()" style="border-color:#3498db;"> 导入 JSON </button>
+      <input type="file" id="importJson" accept=".json" style="display:none" onchange="app.importProject(event)">
+    </div>
+    <div class="empty-hint" id="emptyHint">点击上方按钮添加节点<br>从输出端口 (右侧圆点) 拖拽到输入端口 (左侧圆点) 连线<br>点击连线变红后再点删除 / 右键直接删除<br>按 Delete 键删除选中节点<br>鼠标中键拖拽平移视图 / 空格键复位<br><br>点击「演示数据」可快速体验</div>
+  </div>
+  <div class="divider" id="divider"></div>
+  <div class="chart-panel" id="chartPanel">
+    <div class="chart-header">
+      <span>波形显示</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div class="auto-run-wrap" id="autoRunWrap">
+          <button class="run-btn auto-btn" id="autoRunBtn" onclick="app.toggleAutoRun()">⏱</button>
+          <input type="number" class="auto-interval" id="autoInterval" value="2" min="0.1" step="0.1" title="刷新间隔(秒)">
+          <span style="font-size:11px;color:#aaa;">秒</span>
+          <div class="auto-bar-track"><div class="auto-bar-fill" id="autoBarFill"></div></div>
+        </div>
+        <button class="run-btn" onclick="app.run()">▶ 运行</button>
+      </div>
+    </div>
+    <div class="chart-scroll" id="chartScroll">
+      <div style="text-align:center;color:#444;padding:40px 0;font-size:13px;" id="chartEmpty">运行后在此显示波形</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  DSP - Signal Processing Utilities
+// ============================================================
+const DSP = {
+  lowpass(signal, cutoff, sampleRate) {
+    if (!signal.length) return [];
+    const rc = 1.0 / (cutoff * 2 * Math.PI);
+    const dt = 1.0 / sampleRate;
+    const alpha = dt / (rc + dt);
+    const out = [signal[0]];
+    for (let i = 1; i < signal.length; i++) {
+      out.push(out[i - 1] + alpha * (signal[i] - out[i - 1]));
+    }
+    return out;
+  },
+
+  highpass(signal, cutoff, sampleRate) {
+    if (!signal.length) return [];
+    const rc = 1.0 / (cutoff * 2 * Math.PI);
+    const dt = 1.0 / sampleRate;
+    const alpha = rc / (rc + dt);
+    const out = [0];
+    for (let i = 1; i < signal.length; i++) {
+      out.push(alpha * (out[i - 1] + signal[i] - signal[i - 1]));
+    }
+    return out;
+  },
+
+  bandpass(signal, lowCut, highCut, sampleRate) {
+    if (!signal.length) return [];
+    const low = DSP.lowpass(signal, highCut, sampleRate);
+    return DSP.highpass(low, lowCut, sampleRate);
+  },
+
+  weighted(signal, weight) {
+    if (!signal.length) return [];
+    const w = weight;
+    const out = [signal[0]];
+    for (let i = 1; i < signal.length; i++) {
+      out.push(out[i - 1] * w + signal[i] * (1 - w));
+    }
+    return out;
+  }
+};
+
+// ============================================================
+//  NODE DEFINITIONS
+// ============================================================
+let nodeIdCounter = 0;
+
+const NODE_DEFS = {
+  input: {
+    type: 'input', title: 'CSV 输入',
+    inputs: [],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'samplerate', label: '采样率 (Hz)', type: 'number', default: 1000 },
+      { id: 'file', label: '波形数据', type: 'file' }
+    ]
+  },
+  lowpass: {
+    type: 'lowpass', title: '低通滤波器',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'cutoff', label: '截止频率 (Hz)', type: 'number', default: 50 }
+    ]
+  },
+  highpass: {
+    type: 'highpass', title: '高通滤波器',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'cutoff', label: '截止频率 (Hz)', type: 'number', default: 50 }
+    ]
+  },
+  bandpass: {
+    type: 'bandpass', title: '带通滤波器',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'lowcut', label: '低截止 (Hz)', type: 'number', default: 30 },
+      { id: 'highcut', label: '高截止 (Hz)', type: 'number', default: 100 }
+    ]
+  },
+  weighted: {
+    type: 'weighted', title: '加权滤波器',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'weight', label: '权重 (前值系数, 0~1)', type: 'number', default: 0.9 }
+    ]
+  },
+  custom: {
+    type: 'custom', title: '自定义节点',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'code', label: 'JS 算法', type: 'code',
+        default: '// signal: 输入数组\n// sampleRate: 采样率\n// 示例: 取绝对值\nreturn signal.map(v => Math.abs(v));' }
+    ]
+  },
+  splitter: {
+    type: 'splitter', title: '分流器',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out1', label: '输出1' }, { id: 'out2', label: '输出2' }],
+    params: []
+  },
+  multiplier: {
+    type: 'multiplier', title: '乘法器',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'factor', label: '乘数', type: 'number', default: 2 }
+    ]
+  },
+  adder: {
+    type: 'adder', title: '加法器',
+    inputs: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: []
+  },
+  subtractor: {
+    type: 'subtractor', title: '减法器',
+    inputs: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: []
+  },
+  inverter: {
+    type: 'inverter', title: '反相器',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: []
+  },
+  normalizer: {
+    type: 'normalizer', title: '归一化',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: []
+  },
+  probe: {
+    type: 'probe', title: '图表探针',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [],
+    params: [
+      { id: 'name', label: '探针名称', type: 'text', default: '' }
+    ]
+  }
+};
+
+// ============================================================
+//  MAIN APPLICATION
+// ============================================================
+class App {
+  constructor() {
+    this.nodes = [];
+    this.connections = [];
+    this.sampleRate = 1000;
+    this.probeData = new Map();
+    this.nodeCache = new Map(); // nodeId -> { portId -> data[] }
+
+    this.canvasPanel = document.getElementById('canvasPanel');
+    this.gridCanvas = document.getElementById('gridCanvas');
+    this.gridCtx = this.gridCanvas.getContext('2d');
+    this.svg = document.getElementById('connectionsSvg');
+    this.viewport = document.getElementById('viewport');
+    this.chartScroll = document.getElementById('chartScroll');
+
+    this.draggingNode = null;
+    this.dragOffset = { x: 0, y: 0 };
+    this.connecting = null;
+    this.selectedNode = null;
+    this.copiedNode = null;
+    this.panning = false;
+    this.panStart = { x: 0, y: 0 };
+    this.panOffset = { x: 0, y: 0 };
+
+    this.initDivider();
+    this.initEvents();
+    this.resize();
+    this.drawGrid();
+
+    window.addEventListener('resize', () => { this.resize(); this.drawGrid(); });
+  }
+
+  // ---- Toast ----
+  toast(msg, type = 'info') {
+    const el = document.createElement('div');
+    el.className = `toast toast-${type}`;
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2500);
+  }
+
+  // ---- Auto Run ----
+  toggleAutoRun() {
+    if (this._autoRunning) { this.stopAutoRun(); return; }
+    const btn = document.getElementById('autoRunBtn');
+    const bar = document.getElementById('autoBarFill');
+    const sec = Math.max(0.1, parseFloat(document.getElementById('autoInterval').value) || 2);
+    const ms = sec * 1000;
+    this._autoRunning = true;
+    btn.classList.add('active');
+    btn.textContent = '⏸';
+    bar.style.transition = `width ${sec}s linear`;
+
+    const tick = () => {
+      bar.style.transition = 'none';
+      bar.style.width = '0%';
+      bar.offsetHeight; // force reflow
+      bar.style.transition = `width ${sec}s linear`;
+      bar.style.width = '100%';
+    };
+    tick();
+    this.run();
+    this._autoRunTimer = setInterval(() => { tick(); this.run(); }, ms);
+  }
+
+  stopAutoRun() {
+    this._autoRunning = false;
+    clearInterval(this._autoRunTimer);
+    this._autoRunTimer = null;
+    const btn = document.getElementById('autoRunBtn');
+    const bar = document.getElementById('autoBarFill');
+    btn.classList.remove('active');
+    btn.textContent = '⏱';
+    bar.style.transition = 'none';
+    bar.style.width = '0%';
+  }
+
+  // ---- Resize / Grid ----
+  resize() {
+    const rect = this.canvasPanel.getBoundingClientRect();
+    this.gridCanvas.width = rect.width * (window.devicePixelRatio || 1);
+    this.gridCanvas.height = rect.height * (window.devicePixelRatio || 1);
+    this.gridCanvas.style.width = rect.width + 'px';
+    this.gridCanvas.style.height = rect.height + 'px';
+    this.drawGrid();
+  }
+
+  drawGrid() {
+    const ctx = this.gridCtx;
+    const dpr = window.devicePixelRatio || 1;
+    const w = this.gridCanvas.width, h = this.gridCanvas.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.scale(dpr, dpr);
+    ctx.strokeStyle = '#1b2838';
+    ctx.lineWidth = 1;
+    const step = 30;
+    const dw = w / dpr, dh = h / dpr;
+    const offX = ((this.panOffset.x % step) + step) % step;
+    const offY = ((this.panOffset.y % step) + step) % step;
+    for (let x = offX; x < dw; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, dh); ctx.stroke(); }
+    for (let y = offY; y < dh; y += step) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(dw, y); ctx.stroke(); }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
+  // ---- Divider drag ----
+  initDivider() {
+    const divider = document.getElementById('divider');
+    divider.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      divider.classList.add('dragging');
+      const startX = e.clientX;
+      const cp = this.canvasPanel, tp = document.getElementById('chartPanel');
+      const appEl = document.querySelector('.app');
+      const totalW = appEl.getBoundingClientRect().width;
+      const divW = divider.getBoundingClientRect().width;
+      const usable = totalW - divW;
+      const startL = cp.getBoundingClientRect().width;
+      const onMove = (ev) => {
+        const dx = ev.clientX - startX;
+        let newL = startL + dx;
+        if (newL < 250) newL = 250;
+        if (newL > usable - 250) newL = usable - 250;
+        const pct = (newL / usable) * 100;
+        cp.style.flex = `0 0 ${pct}%`;
+        tp.style.flex = `1 1 0%`;
+        this.resize();
+        this.renderConnections();
+      };
+      const onUp = () => {
+        divider.classList.remove('dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        this.scheduleSave();
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
+  // ---- Events ----
+  initEvents() {
+    // Middle mouse button panning - move all nodes by delta
+    this.canvasPanel.addEventListener('mousedown', (e) => {
+      if (e.button === 1) { // middle button
+        e.preventDefault();
+        this.panning = true;
+        this.panStart = { x: e.clientX, y: e.clientY };
+        this.canvasPanel.style.cursor = 'grabbing';
+      }
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (this.panning) {
+        const dx = e.clientX - this.panStart.x;
+        const dy = e.clientY - this.panStart.y;
+        this.panStart = { x: e.clientX, y: e.clientY };
+        this.panOffset.x += dx;
+        this.panOffset.y += dy;
+        // Move all nodes
+        for (const node of this.nodes) {
+          node.x += dx;
+          node.y += dy;
+          if (node.el) {
+            node.el.style.left = node.x + 'px';
+            node.el.style.top = node.y + 'px';
+          }
+        }
+        this.drawGrid();
+        this.renderConnections();
+      }
+      if (this.connecting) {
+        const rect = this.canvasPanel.getBoundingClientRect();
+        this.drawTempConnection(e.clientX - rect.left, e.clientY - rect.top);
+      }
+    });
+
+    document.addEventListener('mouseup', (e) => {
+      if (e.button === 1 && this.panning) {
+        this.panning = false;
+        this.canvasPanel.style.cursor = '';
+        this.scheduleSave();
+      }
+      if (this.connecting) {
+        const target = document.elementFromPoint(e.clientX, e.clientY);
+        if (target && target.classList.contains('port-in')) {
+          this.finishConnection(parseInt(target.dataset.nodeId), target.dataset.portId);
+        } else {
+          this.cancelConnection();
+        }
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      const inInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
+      // Delete selected node
+      if (e.key === 'Delete' && this.selectedNode && !inInput) {
+        this.removeNode(this.selectedNode);
+      }
+      // Space to reset view
+      if (e.key === ' ' && !inInput) {
+        e.preventDefault();
+        this.resetView();
+      }
+      // F5 to run
+      if (e.key === 'F5') {
+        e.preventDefault();
+        this.run();
+      }
+      // Ctrl+C copy node
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && this.selectedNode && !inInput) {
+        const node = this.nodes.find(n => n.id === this.selectedNode);
+        if (node) {
+          this.copiedNode = {
+            type: node.type,
+            params: { ...node.params },
+            data: node._data ? [...node._data] : null
+          };
+          this.toast(`已复制: ${node.def.title}`, 'info');
+        }
+      }
+      // Ctrl+V paste node
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v' && this.copiedNode && !inInput) {
+        e.preventDefault();
+        const node = this.addNode(this.copiedNode.type);
+        if (node) {
+          node.params = { ...this.copiedNode.params };
+          if (this.copiedNode.data) node._data = [...this.copiedNode.data];
+          node.x += 30;
+          node.y += 30;
+          node.el.style.left = node.x + 'px';
+          node.el.style.top = node.y + 'px';
+          // Update input fields
+          node.el.querySelectorAll('input, textarea').forEach(inp => {
+            const label = inp.previousElementSibling;
+            if (label && label.tagName === 'LABEL') {
+              const paramDef = node.def.params.find(p => p.label === label.textContent);
+              if (paramDef && node.params[paramDef.id] !== undefined) {
+                inp.value = node.params[paramDef.id];
+              }
+            }
+          });
+          if (node.type === 'input' && node._data) {
+            const lbl = document.getElementById(`fileLabel-${node.id}`);
+            if (lbl) lbl.textContent = `已复制 ${node._data.length} 点`;
+          }
+          this.selectNode(node.id);
+          this.toast(`已粘贴: ${node.def.title}`, 'info');
+        }
+      }
+    });
+
+    this.canvasPanel.addEventListener('mousedown', (e) => {
+      if (e.button === 0 && (e.target === this.canvasPanel || e.target === this.viewport || e.target === this.gridCanvas || e.target === this.svg)) {
+        this.selectNode(null);
+      }
+    });
+
+    // Prevent context menu on middle click
+    this.canvasPanel.addEventListener('contextmenu', (e) => {
+      // allow right-click context menu
+    });
+  }
+
+  // ---- Node Management ----
+  addNode(type, x, y) {
+    const def = NODE_DEFS[type];
+    if (!def) return;
+    const id = ++nodeIdCounter;
+    if (x === undefined) x = 60 + (this.nodes.length % 5) * 50;
+    if (y === undefined) y = 80 + Math.floor(this.nodes.length / 5) * 40;
+    const node = { id, type, def, x, y, params: {}, _data: null, el: null };
+    def.params.forEach(p => { node.params[p.id] = p.default; });
+    this.nodes.push(node);
+    this.renderNode(node);
+    this.updateEmptyHint();
+    this.scheduleSave();
+    return node;
+  }
+
+  renderNode(node) {
+    const def = node.def;
+    const el = document.createElement('div');
+    el.className = `node node-${def.type}`;
+    el.dataset.nodeId = node.id;
+    el.style.left = node.x + 'px';
+    el.style.top = node.y + 'px';
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'node-header';
+    header.innerHTML = `<span>${def.title}</span>`;
+    el.appendChild(header);
+
+    // Delete button
+    const del = document.createElement('button');
+    del.className = 'node-delete';
+    del.textContent = '×';
+    del.onclick = (e) => { e.stopPropagation(); this.removeNode(node.id); };
+    el.appendChild(del);
+
+    // Body
+    const body = document.createElement('div');
+    body.className = 'node-body';
+    const maxPorts = Math.max(def.inputs.length, def.outputs.length, 1);
+    body.style.minHeight = (maxPorts * 28 + 12) + 'px';
+
+    def.params.forEach(p => {
+      const label = document.createElement('label');
+      label.textContent = p.label;
+      body.appendChild(label);
+
+      if (p.type === 'file') {
+        const upload = document.createElement('div');
+        upload.className = 'file-upload';
+        const btn = document.createElement('span');
+        btn.className = 'file-btn';
+        btn.textContent = '📁 选择 CSV 文件';
+        btn.id = `fileLabel-${node.id}`;
+        const inp = document.createElement('input');
+        inp.type = 'file';
+        inp.accept = '.csv,.txt';
+        inp.onchange = (e) => this.handleFileUpload(node, e);
+        upload.appendChild(btn);
+        upload.appendChild(inp);
+        body.appendChild(upload);
+      } else if (p.type === 'code') {
+        const ta = document.createElement('textarea');
+        ta.value = node.params[p.id];
+        ta.rows = 6;
+        ta.spellcheck = false;
+        ta.oninput = () => { node.params[p.id] = ta.value; this.scheduleSave(); };
+        body.appendChild(ta);
+      } else if (p.type === 'number') {
+        const inp = document.createElement('input');
+        inp.type = 'number';
+        inp.value = node.params[p.id];
+        inp.min = 1;
+        inp.onchange = () => { node.params[p.id] = parseFloat(inp.value) || 0; this.scheduleSave(); };
+        body.appendChild(inp);
+      } else {
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.value = node.params[p.id];
+        inp.placeholder = p.default || '';
+        inp.onchange = () => { node.params[p.id] = inp.value; this.scheduleSave(); };
+        body.appendChild(inp);
+      }
+    });
+
+    el.appendChild(body);
+
+    // Input ports - positioned relative to body
+    def.inputs.forEach((port, i) => {
+      const p = document.createElement('div');
+      p.className = 'port port-in';
+      p.dataset.nodeId = node.id;
+      p.dataset.portId = port.id;
+      p.dataset.portIdx = i;
+      p.dataset.portTotal = def.inputs.length;
+      const lbl = document.createElement('span');
+      lbl.className = 'port-label';
+      lbl.textContent = port.label;
+      p.appendChild(lbl);
+      el.appendChild(p);
+    });
+
+    // Output ports - positioned relative to body
+    def.outputs.forEach((port, i) => {
+      const p = document.createElement('div');
+      p.className = 'port port-out';
+      p.dataset.nodeId = node.id;
+      p.dataset.portId = port.id;
+      p.dataset.portIdx = i;
+      p.dataset.portTotal = def.outputs.length;
+      const lbl = document.createElement('span');
+      lbl.className = 'port-label';
+      lbl.textContent = port.label;
+      p.appendChild(lbl);
+
+      p.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        this.startConnection(node.id, port.id, p);
+      });
+
+      el.appendChild(p);
+    });
+
+    // Drag
+    header.addEventListener('mousedown', (e) => {
+      if (e.target.tagName === 'BUTTON') return;
+      e.preventDefault();
+      this.draggingNode = node;
+      const rect = el.getBoundingClientRect();
+      this.dragOffset.x = e.clientX - rect.left;
+      this.dragOffset.y = e.clientY - rect.top;
+      this.selectNode(node.id);
+      el.style.zIndex = 20;
+
+      const onMove = (ev) => {
+        const panelRect = this.canvasPanel.getBoundingClientRect();
+        node.x = ev.clientX - panelRect.left - this.dragOffset.x;
+        node.y = ev.clientY - panelRect.top - this.dragOffset.y;
+        el.style.left = node.x + 'px';
+        el.style.top = node.y + 'px';
+        this.renderConnections();
+      };
+      const onUp = () => {
+        this.draggingNode = null;
+        el.style.zIndex = 10;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        this.scheduleSave();
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+
+    this.viewport.appendChild(el);
+    node.el = el;
+    requestAnimationFrame(() => this.updatePortPositions(node));
+  }
+
+  updatePortPositions(node) {
+    const el = node.el;
+    if (!el) return;
+    const header = el.querySelector('.node-header');
+    const body = el.querySelector('.node-body');
+    const headerH = header.offsetHeight;
+    const bodyH = body.offsetHeight;
+    const ports = el.querySelectorAll('.port');
+    ports.forEach(p => {
+      const idx = parseInt(p.dataset.portIdx);
+      const total = parseInt(p.dataset.portTotal);
+      p.style.top = (headerH + bodyH / (total + 1) * (idx + 1) - 7) + 'px';
+    });
+  }
+
+  selectNode(id) {
+    this.nodes.forEach(n => n.el && n.el.classList.toggle('selected', n.id === id));
+    this.selectedNode = id;
+  }
+
+  removeNode(id) {
+    this.connections = this.connections.filter(c => c.fromNode !== id && c.toNode !== id);
+    const node = this.nodes.find(n => n.id === id);
+    if (node && node.el) node.el.remove();
+    this.nodes = this.nodes.filter(n => n.id !== id);
+    this.renderConnections();
+    this.updateEmptyHint();
+    if (this.selectedNode === id) this.selectedNode = null;
+    this.scheduleSave();
+  }
+
+  updateEmptyHint() {
+    document.getElementById('emptyHint').style.display = this.nodes.length === 0 ? 'block' : 'none';
+  }
+
+  clearAll() {
+    if (this.nodes.length === 0) return;
+    if (!confirm('确定清空画布？所有节点和连线将被删除。')) return;
+    // Stop auto-run
+    this.stopAutoRun();
+    for (const n of this.nodes) { if (n.el) n.el.remove(); }
+    this.nodes = [];
+    this.connections = [];
+    this.selectedNode = null;
+    this.probeData.clear();
+    this.nodeCache.clear();
+    this.renderConnections();
+    this.updateEmptyHint();
+    this.chartScroll.innerHTML = '<div style="text-align:center;color:#444;padding:40px 0;font-size:13px;" id="chartEmpty">运行后在此显示波形</div>';
+    this.resetView();
+    this.scheduleSave();
+    this.toast('画布已清空', 'info');
+  }
+
+  // ---- File Upload ----
+  handleFileUpload(node, e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const label = document.getElementById(`fileLabel-${node.id}`);
+    label.textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target.result;
+      const lines = text.trim().split(/\r?\n/);
+      const values = [];
+      for (const line of lines) {
+        const parts = line.split(/[,\t;]+/);
+        for (const p of parts) {
+          const v = parseFloat(p.trim());
+          if (!isNaN(v)) values.push(v);
+        }
+      }
+      node._data = values;
+      this.toast(`已导入 ${values.length} 个采样点`, 'success');
+      this.scheduleSave();
+    };
+    reader.readAsText(file);
+  }
+
+  // ---- Demo Data ----
+  loadDemo() {
+    // Generate demo: sine + noise + high freq component
+    const sr = 1000;
+    const n = 2000;
+    const data = [];
+    for (let i = 0; i < n; i++) {
+      const t = i / sr;
+      const signal = Math.sin(2 * Math.PI * 5 * t) * 2.0;       // 5 Hz base
+      const noise = (Math.random() - 0.5) * 1.5;                // noise
+      const hf = Math.sin(2 * Math.PI * 150 * t) * 0.8;         // 150 Hz component
+      data.push(signal + noise + hf);
+    }
+
+    // Create demo flow: Input -> Lowpass -> Probe (filtered)
+    //                   Input -> Probe (raw)
+    const nInput = this.addNode('input', 60, 100);
+    nInput._data = data;
+    nInput.params.samplerate = sr;
+    const fileLabel = document.getElementById(`fileLabel-${nInput.id}`);
+    if (fileLabel) fileLabel.textContent = 'demo_sine+noise.csv';
+
+    const nLowpass = this.addNode('lowpass', 340, 100);
+    nLowpass.params.cutoff = 30;
+
+    const nSplitter = this.addNode('splitter', 340, 300);
+
+    const nProbeRaw = this.addNode('probe', 620, 60);
+    nProbeRaw.params.name = '原始信号';
+
+    const nProbeFiltered = this.addNode('probe', 620, 200);
+    nProbeFiltered.params.name = '低通滤波后';
+
+    const nProbeHigh = this.addNode('probe', 620, 350);
+    nProbeHigh.params.name = '高通滤波后';
+
+    const nHighpass = this.addNode('highpass', 60, 300);
+    nHighpass.params.cutoff = 80;
+
+    // Connect
+    this.addConnection(nInput.id, 'out', nLowpass.id, 'in');
+    this.addConnection(nInput.id, 'out', nProbeRaw.id, 'in');
+    this.addConnection(nLowpass.id, 'out', nProbeFiltered.id, 'in');
+    this.addConnection(nInput.id, 'out', nHighpass.id, 'in');
+    this.addConnection(nHighpass.id, 'out', nProbeHigh.id, 'in');
+
+    this.toast('已加载演示数据，点击「运行」查看波形', 'success');
+  }
+
+  addConnection(fromNodeId, fromPortId, toNodeId, toPortId) {
+    this.connections = this.connections.filter(c => !(c.toNode === toNodeId && c.toPort === toPortId));
+    this.connections.push({ fromNode: fromNodeId, fromPort: fromPortId, toNode: toNodeId, toPort: toPortId });
+    this.renderConnections();
+    this.scheduleSave();
+  }
+
+  // ---- Connections ----
+  startConnection(fromNodeId, fromPortId, portEl) {
+    const rect = this.canvasPanel.getBoundingClientRect();
+    const portRect = portEl.getBoundingClientRect();
+    const tempPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    tempPath.classList.add('temp');
+    this.svg.appendChild(tempPath);
+    this.connecting = {
+      fromNodeId, fromPortId,
+      startX: portRect.left - rect.left + portRect.width / 2,
+      startY: portRect.top - rect.top + portRect.height / 2,
+      tempPath
+    };
+  }
+
+  drawTempConnection(mx, my) {
+    if (!this.connecting) return;
+    this.connecting.tempPath.setAttribute('d', this.bezierPath(this.connecting.startX, this.connecting.startY, mx, my));
+  }
+
+  finishConnection(toNodeId, toPortId) {
+    if (!this.connecting) return;
+    const { fromNodeId, fromPortId, tempPath } = this.connecting;
+    tempPath.remove();
+    if (fromNodeId === toNodeId) { this.connecting = null; return; }
+    this.connections = this.connections.filter(c => !(c.toNode === toNodeId && c.toPort === toPortId));
+    this.connections.push({ fromNode: fromNodeId, fromPort: fromPortId, toNode: toNodeId, toPort: toPortId });
+    this.connecting = null;
+    this.renderConnections();
+    this.scheduleSave();
+  }
+
+  cancelConnection() {
+    if (this.connecting) {
+      this.connecting.tempPath.remove();
+      this.connecting = null;
+    }
+  }
+
+  getPortPos(nodeId, portId) {
+    const node = this.nodes.find(n => n.id === nodeId);
+    if (!node || !node.el) return { x: 0, y: 0 };
+    const port = node.el.querySelector(`.port[data-node-id="${nodeId}"][data-port-id="${portId}"]`);
+    if (!port) return { x: 0, y: 0 };
+    // Position relative to the viewport's local coordinate system
+    return {
+      x: node.x + port.offsetLeft + 7,
+      y: node.y + port.offsetTop + 7
+    };
+  }
+
+  resetView() {
+    // Move all nodes back by the pan offset
+    for (const node of this.nodes) {
+      node.x -= this.panOffset.x;
+      node.y -= this.panOffset.y;
+      if (node.el) {
+        node.el.style.left = node.x + 'px';
+        node.el.style.top = node.y + 'px';
+      }
+    }
+    this.panOffset = { x: 0, y: 0 };
+    this.drawGrid();
+    this.renderConnections();
+    this.scheduleSave();
+  }
+
+  bezierPath(x1, y1, x2, y2) {
+    const dx = Math.max(Math.abs(x2 - x1) * 0.5, 50);
+    return `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
+  }
+
+  renderConnections() {
+    while (this.svg.firstChild) this.svg.removeChild(this.svg.firstChild);
+    for (const conn of this.connections) {
+      const from = this.getPortPos(conn.fromNode, conn.fromPort);
+      const to = this.getPortPos(conn.toNode, conn.toPort);
+      const d = this.bezierPath(from.x, from.y, to.x, to.y);
+
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.classList.add('conn-group');
+
+      // Wide invisible hit area for easy clicking
+      const hit = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      hit.classList.add('conn-hit');
+      hit.setAttribute('d', d);
+
+      // Visible thin line
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      line.classList.add('conn-line');
+      line.setAttribute('d', d);
+
+      // Click to delete
+      hit.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (g.classList.contains('deleting')) {
+          this.connections = this.connections.filter(c => c !== conn);
+          this.renderConnections();
+          this.scheduleSave();
+        } else {
+          g.classList.add('deleting');
+          setTimeout(() => { if (g.parentNode) g.classList.remove('deleting'); }, 2000);
+        }
+      });
+
+      // Right-click to delete directly
+      hit.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.connections = this.connections.filter(c => c !== conn);
+        this.renderConnections();
+        this.scheduleSave();
+      });
+
+      g.appendChild(line);
+      g.appendChild(hit);
+      this.svg.appendChild(g);
+    }
+  }
+
+  // ---- Signal Execution ----
+  getUpstreamData(node, portId) {
+    const conn = this.connections.find(c => c.toNode === node.id && c.toPort === portId);
+    if (!conn) return [];
+    const cached = this.nodeCache.get(conn.fromNode);
+    return (cached && cached[conn.fromPort]) || [];
+  }
+
+  executeNode(node) {
+    if (this.nodeCache.has(node.id)) return;
+    // Execute upstream first
+    for (const conn of this.connections) {
+      if (conn.toNode === node.id) {
+        const upNode = this.nodes.find(n => n.id === conn.fromNode);
+        if (upNode) this.executeNode(upNode);
+      }
+    }
+
+    const outputs = {};
+    switch (node.type) {
+      case 'input':
+        this.sampleRate = node.params.samplerate || 1000;
+        outputs['out'] = node._data ? [...node._data] : [];
+        break;
+
+      case 'lowpass': {
+        const inp = this.getUpstreamData(node, 'in');
+        outputs['out'] = inp.length ? DSP.lowpass(inp, node.params.cutoff || 50, this.sampleRate) : [];
+        break;
+      }
+      case 'highpass': {
+        const inp = this.getUpstreamData(node, 'in');
+        outputs['out'] = inp.length ? DSP.highpass(inp, node.params.cutoff || 50, this.sampleRate) : [];
+        break;
+      }
+      case 'bandpass': {
+        const inp = this.getUpstreamData(node, 'in');
+        outputs['out'] = inp.length ? DSP.bandpass(inp, node.params.lowcut || 30, node.params.highcut || 100, this.sampleRate) : [];
+        break;
+      }
+      case 'weighted': {
+        const inp = this.getUpstreamData(node, 'in');
+        const w = node.params.weight !== undefined ? node.params.weight : 0.9;
+        outputs['out'] = inp.length ? DSP.weighted(inp, w) : [];
+        break;
+      }
+      case 'custom': {
+        const inp = this.getUpstreamData(node, 'in');
+        try {
+          const fn = new Function('signal', 'sampleRate', node.params.code || 'return signal;');
+          const result = fn(inp, this.sampleRate);
+          outputs['out'] = Array.isArray(result) ? result : [];
+        } catch (err) {
+          console.error('Custom node error:', err);
+          this.toast(`自定义节点错误: ${err.message}`, 'error');
+          outputs['out'] = [];
+        }
+        break;
+      }
+      case 'splitter': {
+        const inp = this.getUpstreamData(node, 'in');
+        outputs['out1'] = [...inp];
+        outputs['out2'] = [...inp];
+        break;
+      }
+      case 'multiplier': {
+        const inp = this.getUpstreamData(node, 'in');
+        const factor = node.params.factor !== undefined ? node.params.factor : 2;
+        outputs['out'] = inp.map(v => v * factor);
+        break;
+      }
+      case 'adder': {
+        const a = this.getUpstreamData(node, 'a');
+        const b = this.getUpstreamData(node, 'b');
+        const len = Math.max(a.length, b.length);
+        const out = [];
+        for (let i = 0; i < len; i++) out.push((a[i] || 0) + (b[i] || 0));
+        outputs['out'] = out;
+        break;
+      }
+      case 'subtractor': {
+        const a = this.getUpstreamData(node, 'a');
+        const b = this.getUpstreamData(node, 'b');
+        const len = Math.max(a.length, b.length);
+        const out = [];
+        for (let i = 0; i < len; i++) out.push((a[i] || 0) - (b[i] || 0));
+        outputs['out'] = out;
+        break;
+      }
+      case 'inverter': {
+        const inp = this.getUpstreamData(node, 'in');
+        outputs['out'] = inp.map(v => -v);
+        break;
+      }
+      case 'normalizer': {
+        const inp = this.getUpstreamData(node, 'in');
+        if (!inp.length) { outputs['out'] = []; break; }
+        let min = Infinity, max = -Infinity;
+        for (const v of inp) { if (v < min) min = v; if (v > max) max = v; }
+        const range = max - min;
+        outputs['out'] = range === 0 ? inp.map(() => 0) : inp.map(v => 2 * (v - min) / range - 1);
+        break;
+      }
+      case 'probe': {
+        const inp = this.getUpstreamData(node, 'in');
+        const name = node.params.name || `探针 #${node.id}`;
+        this.probeData.set(name, inp);
+        break;
+      }
+    }
+
+    this.nodeCache.set(node.id, outputs);
+  }
+
+  run() {
+    this.probeData.clear();
+    this.nodeCache.clear();
+    this.sampleRate = 1000;
+
+    const inputNodes = this.nodes.filter(n => n.type === 'input');
+    if (inputNodes.length === 0) { this.toast('请先添加 CSV 输入节点', 'error'); return; }
+
+    // Execute all nodes
+    for (const node of this.nodes) this.executeNode(node);
+
+    // Collect input data for chart header
+    let inputData = [];
+    for (const node of inputNodes) {
+      const cached = this.nodeCache.get(node.id);
+      if (cached && cached.out) inputData = cached.out;
+    }
+
+    this.renderChart(inputData);
+    this.toast('运行完成', 'success');
+  }
+
+  // ---- Chart Rendering ----
+  renderChart(inputData) {
+    this.chartDataList = []; // { title, data, color, canvas }
+    this.chartZoom = 1;
+    this.chartOffset = 0; // 0~1 normalized
+    this.cursorX = -1; // -1 = hidden
+
+    const container = this.chartScroll;
+    container.innerHTML = '';
+
+    if (inputData.length > 0) {
+      this.addChartItem(container, '输入信号', inputData, '#2e86c1');
+    }
+
+    const colors = ['#e74c3c', '#27ae60', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#3498db'];
+    let ci = 0;
+    for (const [name, data] of this.probeData) {
+      if (data.length > 0) {
+        this.addChartItem(container, name, data, colors[ci % colors.length]);
+        ci++;
+      }
+    }
+
+    if (container.children.length === 0) {
+      container.innerHTML = '<div style="text-align:center;color:#444;padding:40px 0;font-size:13px;">没有数据可显示</div>';
+      return;
+    }
+
+    // Cursor readout
+    this.cursorReadout = document.createElement('div');
+    this.cursorReadout.style.cssText = 'position:sticky;bottom:0;background:#0d1b2a;border-top:1px solid #1b2838;padding:6px 10px;font-size:11px;color:#aaa;z-index:10;';
+    container.appendChild(this.cursorReadout);
+
+    // Chart events
+    this.initChartEvents();
+    this.redrawCharts();
+  }
+
+  addChartItem(container, title, data, color) {
+    const item = document.createElement('div');
+    item.className = 'chart-item';
+    const label = document.createElement('div');
+    label.className = 'chart-item-title';
+    label.innerHTML = `<span class="dot" style="background:${color}"></span>${title} (${data.length} 点)`;
+    item.appendChild(label);
+    const canvas = document.createElement('canvas');
+    canvas.style.height = '120px';
+    canvas.style.display = 'block';
+    item.appendChild(canvas);
+    container.appendChild(item);
+    this.chartDataList.push({ title, data, color, canvas });
+  }
+
+  initChartEvents() {
+    const scroll = this.chartScroll;
+    // Remove old listeners
+    if (this._chartWheel) scroll.removeEventListener('wheel', this._chartWheel);
+    if (this._chartMouseMove) scroll.removeEventListener('mousemove', this._chartMouseMove);
+    if (this._chartMouseLeave) scroll.removeEventListener('mouseleave', this._chartMouseLeave);
+
+    // Zoom with wheel
+    this._chartWheel = (e) => {
+      e.preventDefault();
+      const rect = scroll.getBoundingClientRect();
+      const mouseXRatio = (e.clientX - rect.left) / rect.width;
+
+      const zoomFactor = e.deltaY < 0 ? 1.2 : 1 / 1.2;
+      const oldZoom = this.chartZoom;
+      this.chartZoom = Math.max(1, Math.min(100, this.chartZoom * zoomFactor));
+
+      // Keep the point under mouse stationary
+      const viewW = 1 / oldZoom;
+      const viewStart = this.chartOffset;
+      const mouseDataPos = viewStart + mouseXRatio * viewW;
+      const newViewW = 1 / this.chartZoom;
+      this.chartOffset = mouseDataPos - mouseXRatio * newViewW;
+      this.chartOffset = Math.max(0, Math.min(1 - newViewW, this.chartOffset));
+
+      this.redrawCharts();
+    };
+    scroll.addEventListener('wheel', this._chartWheel, { passive: false });
+
+    // Cursor
+    this._chartMouseMove = (e) => {
+      const rect = scroll.getBoundingClientRect();
+      this.cursorX = e.clientX - rect.left;
+      this.redrawCharts();
+      this.updateCursorReadout();
+    };
+    scroll.addEventListener('mousemove', this._chartMouseMove);
+
+    this._chartMouseLeave = () => {
+      this.cursorX = -1;
+      this.redrawCharts();
+      if (this.cursorReadout) this.cursorReadout.textContent = '';
+    };
+    scroll.addEventListener('mouseleave', this._chartMouseLeave);
+  }
+
+  updateCursorReadout() {
+    if (!this.cursorReadout || this.cursorX < 0) return;
+    const parts = [];
+    for (const item of this.chartDataList) {
+      const dw = item.canvas.clientWidth;
+      const viewStart = this.chartOffset;
+      const viewW = 1 / this.chartZoom;
+      const dataIdx = Math.floor((viewStart + (this.cursorX / dw) * viewW) * item.data.length);
+      const idx = Math.max(0, Math.min(item.data.length - 1, dataIdx));
+      parts.push(`${item.title}: ${item.data[idx]?.toFixed(4) ?? '-'}`);
+    }
+    const timeIdx = this.chartDataList.length > 0 ?
+      Math.floor((this.chartOffset + (this.cursorX / this.chartDataList[0].canvas.clientWidth) * (1 / this.chartZoom)) * this.chartDataList[0].data.length) : 0;
+    parts.unshift(`采样 #${timeIdx}`);
+    this.cursorReadout.textContent = parts.join('  |  ');
+  }
+
+  redrawCharts() {
+    for (const item of this.chartDataList) {
+      this.drawWaveform(item.canvas, item.data, item.color);
+    }
+  }
+
+  drawWaveform(canvas, data, color) {
+    const dpr = window.devicePixelRatio || 1;
+    const dw = canvas.clientWidth;
+    const dh = canvas.clientHeight;
+    canvas.width = dw * dpr;
+    canvas.height = dh * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, dw, dh);
+
+    if (!data.length) return;
+
+    // View window
+    const viewStart = this.chartOffset;
+    const viewW = 1 / this.chartZoom;
+    const viewEnd = viewStart + viewW;
+
+    const iStart = Math.floor(viewStart * data.length);
+    const iEnd = Math.min(data.length, Math.ceil(viewEnd * data.length));
+    const visible = data.slice(iStart, iEnd);
+    if (!visible.length) return;
+
+    let min = Infinity, max = -Infinity;
+    for (const v of visible) { if (v < min) min = v; if (v > max) max = v; }
+    if (min === max) { min -= 1; max += 1; }
+    const range = max - min;
+    const pad = 10;
+
+    // Grid
+    ctx.strokeStyle = '#1b2838';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = pad + (i / 4) * (dh - 2 * pad);
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(dw, y); ctx.stroke();
+    }
+
+    // Center line
+    const centerY = dh - pad - ((0 - min) / range) * (dh - 2 * pad);
+    if (centerY > pad && centerY < dh - pad) {
+      ctx.strokeStyle = '#2a3a4a';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(0, centerY); ctx.lineTo(dw, centerY); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Waveform
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (let px = 0; px < dw; px++) {
+      const ratio = px / dw;
+      const dataIdx = iStart + ratio * (iEnd - iStart);
+      const idx = Math.max(iStart, Math.min(iEnd - 1, Math.floor(dataIdx)));
+      const frac = dataIdx - idx;
+      const v0 = data[idx] ?? 0;
+      const v1 = data[idx + 1] ?? v0;
+      const v = v0 + frac * (v1 - v0);
+      const y = dh - pad - ((v - min) / range) * (dh - 2 * pad);
+      if (px === 0) ctx.moveTo(px, y); else ctx.lineTo(px, y);
+    }
+    ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = '#666';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(max.toFixed(2), 4, 14);
+    ctx.fillText(min.toFixed(2), 4, dh - 4);
+    ctx.textAlign = 'right';
+    ctx.fillText(`${this.chartZoom.toFixed(1)}x`, dw - 4, 14);
+
+    // Cursor line
+    if (this.cursorX >= 0 && this.cursorX <= dw) {
+      ctx.strokeStyle = 'rgba(233,69,96,0.7)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(this.cursorX, 0);
+      ctx.lineTo(this.cursorX, dh);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Value dot
+      const ratio = this.cursorX / dw;
+      const dataIdx = iStart + ratio * (iEnd - iStart);
+      const idx = Math.max(iStart, Math.min(iEnd - 1, Math.floor(dataIdx)));
+      const v = data[idx] ?? 0;
+      const y = dh - pad - ((v - min) / range) * (dh - 2 * pad);
+      ctx.fillStyle = '#e94560';
+      ctx.beginPath();
+      ctx.arc(this.cursorX, y, 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Value label
+      ctx.fillStyle = '#e94560';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'left';
+      const labelX = this.cursorX + 8 > dw - 40 ? this.cursorX - 48 : this.cursorX + 8;
+      ctx.fillText(v.toFixed(3), labelX, y - 6);
+    }
+  }
+
+  // ---- Persistence ----
+  scheduleSave() {
+    clearTimeout(this._saveTimer);
+    this._saveTimer = setTimeout(() => this.saveToLocal(), 500);
+  }
+
+  serialize() {
+    return {
+      version: 4,
+      nodeIdCounter,
+      sampleRate: this.sampleRate,
+      panOffset: { ...this.panOffset },
+      autoInterval: parseFloat(document.getElementById('autoInterval').value) || 2,
+      panelFlex: {
+        left: this.canvasPanel.style.flex || '',
+        right: document.getElementById('chartPanel').style.flex || ''
+      },
+      nodes: this.nodes.map(n => ({
+        id: n.id,
+        type: n.type,
+        x: n.x,
+        y: n.y,
+        params: { ...n.params },
+        data: n._data || null
+      })),
+      connections: this.connections.map(c => ({ ...c }))
+    };
+  }
+
+  deserialize(json) {
+    // Clear current state
+    for (const n of this.nodes) { if (n.el) n.el.remove(); }
+    this.nodes = [];
+    this.connections = [];
+    this.probeData.clear();
+    this.nodeCache.clear();
+
+    nodeIdCounter = json.nodeIdCounter || 0;
+    this.sampleRate = json.sampleRate || 1000;
+
+    // Restore auto-run interval
+    if (json.autoInterval) {
+      document.getElementById('autoInterval').value = json.autoInterval;
+    }
+
+    // Restore pan offset
+    this.panOffset = json.panOffset ? { x: json.panOffset.x || 0, y: json.panOffset.y || 0 } : { x: 0, y: 0 };
+
+    // Restore panel sizes
+    if (json.panelFlex) {
+      if (json.panelFlex.left) this.canvasPanel.style.flex = json.panelFlex.left;
+      if (json.panelFlex.right) document.getElementById('chartPanel').style.flex = json.panelFlex.right;
+    }
+
+    // Restore nodes
+    for (const nd of json.nodes) {
+      const def = NODE_DEFS[nd.type];
+      if (!def) continue;
+      const node = { id: nd.id, type: nd.type, def, x: nd.x, y: nd.y, params: {}, _data: null, el: null };
+      def.params.forEach(p => { node.params[p.id] = nd.params[p.id] !== undefined ? nd.params[p.id] : p.default; });
+      if (nd.data) node._data = nd.data;
+      if (nd.id >= nodeIdCounter) nodeIdCounter = nd.id + 1;
+      this.nodes.push(node);
+      this.renderNode(node);
+      // Restore file label
+      if (nd.data && nd.type === 'input') {
+        const lbl = document.getElementById(`fileLabel-${node.id}`);
+        if (lbl) lbl.textContent = `已加载 ${nd.data.length} 点`;
+      }
+    }
+
+    // Restore connections
+    this.connections = json.connections || [];
+    this.renderConnections();
+    this.resize();
+    this.updateEmptyHint();
+  }
+
+  saveToLocal() {
+    try {
+      localStorage.setItem('filter-lab-project', JSON.stringify(this.serialize()));
+    } catch (e) {
+      console.warn('Save failed:', e);
+    }
+  }
+
+  loadFromLocal() {
+    try {
+      const raw = localStorage.getItem('filter-lab-project');
+      if (!raw) return false;
+      const json = JSON.parse(raw);
+      if (!json.nodes) return false;
+      this.deserialize(json);
+      return true;
+    } catch (e) {
+      console.warn('Load failed:', e);
+      return false;
+    }
+  }
+
+  exportProject() {
+    const data = JSON.stringify(this.serialize(), null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `滤波器实验箱_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    this.toast('项目已导出', 'success');
+  }
+
+  importProject(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const json = JSON.parse(ev.target.result);
+        if (!json.nodes) throw new Error('无效的项目文件');
+        this.deserialize(json);
+        this.saveToLocal();
+        this.toast('项目已导入', 'success');
+      } catch (err) {
+        this.toast('导入失败: ' + err.message, 'error');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+}
+
+// ---- Init ----
+const app = new App();
+// Auto-load saved project, or show hint
+if (!app.loadFromLocal()) {
+  // No saved project, leave empty
+}
+</script>
+</body>
+</html>
