@@ -1735,14 +1735,19 @@ class App {
       }
     });
 
-    // Click to navigate to probe node
+    // Click to navigate to corresponding node
     canvas.addEventListener('click', () => {
-      const probeNode = this.nodes.find(n => {
-        if (n.type !== 'probe') return false;
-        const name = n.params.name || `探针 #${n.id}`;
-        return name === title;
-      });
-      if (probeNode) this.focusNode(probeNode);
+      let targetNode = null;
+      if (title === '输入信号') {
+        targetNode = this.nodes.find(n => n.type === 'input');
+      } else {
+        targetNode = this.nodes.find(n => {
+          if (n.type !== 'probe') return false;
+          const name = n.params.name || `探针 #${n.id}`;
+          return name === title;
+        });
+      }
+      if (targetNode) this.focusNode(targetNode);
     });
 
     container.appendChild(item);
