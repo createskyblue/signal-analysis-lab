@@ -71,6 +71,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .node-maxpool .node-header { background: linear-gradient(135deg, #1e8449, #27ae60); }
 .node-limiter .node-header { background: linear-gradient(135deg, #922b21, #c0392b); }
 .node-phaseshifter .node-header { background: linear-gradient(135deg, #6c3483, #8e44ad); }
+.node-logmultiplier .node-header { background: linear-gradient(135deg, #1a5276, #2980b9); }
+.node-abs .node-header { background: linear-gradient(135deg, #0e6655, #16a085); }
 .node-probe .node-header { background: linear-gradient(135deg, #c0392b, #e74c3c); }
 
 /* ========== Ports ========== */
@@ -164,6 +166,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
       <div class="sidebar-item" onclick="app.addNode('maxpool')"><span class="dot" style="background:#27ae60"></span>Max Pool</div>
       <div class="sidebar-item" onclick="app.addNode('limiter')"><span class="dot" style="background:#c0392b"></span>限位器</div>
       <div class="sidebar-item" onclick="app.addNode('phaseshifter')"><span class="dot" style="background:#8e44ad"></span>移相器</div>
+      <div class="sidebar-item" onclick="app.addNode('logmultiplier')"><span class="dot" style="background:#2980b9"></span>对数乘法器</div>
+      <div class="sidebar-item" onclick="app.addNode('abs')"><span class="dot" style="background:#16a085"></span>绝对值</div>
     </div>
     <div class="sidebar-group">
       <div class="sidebar-group-title">工具</div>
@@ -403,6 +407,20 @@ const NODE_DEFS = {
     params: [
       { id: 'shift', label: '偏移点数 (负=左移, 正=右移)', type: 'number', default: 10 }
     ]
+  },
+  logmultiplier: {
+    type: 'logmultiplier', title: '对数乘法器',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'factor', label: '压缩系数', type: 'number', default: 10 }
+    ]
+  },
+  abs: {
+    type: 'abs', title: '绝对值',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: []
   },
   probe: {
     type: 'probe', title: '图表探针',
@@ -1382,6 +1400,17 @@ class App {
           const s = -shift;
           outputs['out'] = [...inp.slice(s), ...new Array(s).fill(0)];
         }
+        break;
+      }
+      case 'logmultiplier': {
+        const inp = this.getUpstreamData(node, 'in');
+        const factor = node.params.factor !== undefined ? node.params.factor : 10;
+        outputs['out'] = inp.map(v => Math.sign(v) * Math.log(1 + Math.abs(v) * factor) / Math.log(1 + factor));
+        break;
+      }
+      case 'abs': {
+        const inp = this.getUpstreamData(node, 'in');
+        outputs['out'] = inp.map(v => Math.abs(v));
         break;
       }
       case 'probe': {
