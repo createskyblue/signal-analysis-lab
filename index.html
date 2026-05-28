@@ -744,6 +744,13 @@ class App {
     });
 
     document.addEventListener('keydown', (e) => {
+      // F5 to run - always active
+      if (e.key === 'F5') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.run();
+        return;
+      }
       const inInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
       // Delete selected node
       if (e.key === 'Delete' && this.selectedNode && !inInput) {
@@ -753,11 +760,6 @@ class App {
       if (e.key === ' ' && !inInput) {
         e.preventDefault();
         this.resetView();
-      }
-      // F5 to run
-      if (e.key === 'F5') {
-        e.preventDefault();
-        this.run();
       }
       // Ctrl+Z undo
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey && !inInput) {
