@@ -438,6 +438,9 @@ class App {
     this.connecting = null;
     this.selectedNode = null;
     this.copiedNode = null;
+    this.undoStack = [];
+    this.redoStack = [];
+    this.maxHistory = 50;
     this.panning = false;
     this.panStart = { x: 0, y: 0 };
     this.panOffset = { x: 0, y: 0 };
@@ -448,6 +451,80 @@ class App {
     this.drawGrid();
 
     window.addEventListener('resize', () => { this.resize(); this.drawGrid(); });
+  }
+
+  // ---- Undo/Redo ----
+  saveBlueprint() {
+    const blueprint = {
+      nodes: this.nodes.map(n => ({
+        id: n.id, type: n.type, x: n.x, y: n.y,
+        params: { ...n.params },
+        data: n._data ? [...n._data] : null
+      })),
+      connections: this.connections.map(c => ({ ...c }))
+    };
+    return JSON.stringify(blueprint);
+  }
+
+  pushUndo() {
+    const state = this.saveBlueprint();
+    // Don't push if nothing changed
+    if (this.undoStack.length > 0 && this.undoStack[this.undoStack.length - 1] === state) return;
+    this.undoStack.push(state);
+    if (this.undoStack.length > this.maxHistory) this.undoStack.shift();
+    this.redoStack = [];
+  }
+
+  restoreBlueprint(json) {
+    const bp = JSON.parse(json);
+    // Clear current nodes
+    for (const n of this.nodes) { if (n.el) n.el.remove(); }
+    this.nodes = [];
+    this.connections = [];
+    this.nodeCache.clear();
+    this.probeData.clear();
+
+    // Restore nodes
+    for (const nd of bp.nodes) {
+      const def = NODE_DEFS[nd.type];
+      if (!def) continue;
+      const node = { id: nd.id, type: nd.type, def, x: nd.x, y: nd.y, params: {}, _data: null, el: null };
+      def.params.forEach(p => { node.params[p.id] = nd.params[p.id] !== undefined ? nd.params[p.id] : p.default; });
+      if (nd.data) node._data = nd.data;
+      if (nd.id >= nodeIdCounter) nodeIdCounter = nd.id + 1;
+      this.nodes.push(node);
+      this.renderNode(node);
+      if (nd.data && nd.type === 'input') {
+        const lbl = document.getElementById(`fileLabel-${node.id}`);
+        if (lbl) lbl.textContent = `已加载 ${nd.data.length} 点`;
+      }
+    }
+
+    // Restore connections
+    this.connections = bp.connections || [];
+    for (const node of this.nodes) this.updatePortPositions(node);
+    this.renderConnections();
+    this.updateEmptyHint();
+  }
+
+  undo() {
+    if (this.undoStack.length === 0) return;
+    const current = this.saveBlueprint();
+    this.redoStack.push(current);
+    const state = this.undoStack.pop();
+    this.restoreBlueprint(state);
+    this.scheduleSave();
+    this.toast('撤销', 'info');
+  }
+
+  redo() {
+    if (this.redoStack.length === 0) return;
+    const current = this.saveBlueprint();
+    this.undoStack.push(current);
+    const state = this.redoStack.pop();
+    this.restoreBlueprint(state);
+    this.scheduleSave();
+    this.toast('重做', 'info');
   }
 
   // ---- Toast ----
@@ -631,6 +708,16 @@ class App {
         e.preventDefault();
         this.run();
       }
+      // Ctrl+Z undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey && !inInput) {
+        e.preventDefault();
+        this.undo();
+      }
+      // Ctrl+Y or Ctrl+Shift+Z redo
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey)) && !inInput) {
+        e.preventDefault();
+        this.redo();
+      }
       // Ctrl+C copy node
       if ((e.ctrlKey || e.metaKey) && e.key === 'c' && this.selectedNode && !inInput) {
         const node = this.nodes.find(n => n.id === this.selectedNode);
@@ -690,6 +777,7 @@ class App {
   addNode(type, x, y) {
     const def = NODE_DEFS[type];
     if (!def) return;
+    this.pushUndo();
     const id = ++nodeIdCounter;
     if (x === undefined) x = 60 + (this.nodes.length % 5) * 50;
     if (y === undefined) y = 80 + Math.floor(this.nodes.length / 5) * 40;
@@ -846,6 +934,7 @@ class App {
         el.style.zIndex = 10;
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
+        this.pushUndo();
         this.scheduleSave();
       };
       document.addEventListener('mousemove', onMove);
@@ -878,6 +967,7 @@ class App {
   }
 
   removeNode(id) {
+    this.pushUndo();
     this.connections = this.connections.filter(c => c.fromNode !== id && c.toNode !== id);
     const node = this.nodes.find(n => n.id === id);
     if (node && node.el) node.el.remove();
@@ -1017,6 +1107,7 @@ class App {
     const { fromNodeId, fromPortId, tempPath } = this.connecting;
     tempPath.remove();
     if (fromNodeId === toNodeId) { this.connecting = null; return; }
+    this.pushUndo();
     this.connections = this.connections.filter(c => !(c.toNode === toNodeId && c.toPort === toPortId));
     this.connections.push({ fromNode: fromNodeId, fromPort: fromPortId, toNode: toNodeId, toPort: toPortId });
     this.connecting = null;
@@ -1088,6 +1179,7 @@ class App {
       hit.addEventListener('click', (e) => {
         e.stopPropagation();
         if (g.classList.contains('deleting')) {
+          this.pushUndo();
           this.connections = this.connections.filter(c => c !== conn);
           this.renderConnections();
           this.scheduleSave();
@@ -1101,6 +1193,7 @@ class App {
       hit.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         e.stopPropagation();
+        this.pushUndo();
         this.connections = this.connections.filter(c => c !== conn);
         this.renderConnections();
         this.scheduleSave();
