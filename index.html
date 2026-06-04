@@ -35,6 +35,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .node { position: absolute; min-width: 200px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); z-index: 10; user-select: none; }
 .node:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.6); }
 .node.selected { box-shadow: 0 0 0 2px #e94560, 0 6px 20px rgba(0,0,0,0.6); }
+.selection-box { position: absolute; display: none; border: 1px solid #e94560; background: rgba(233,69,96,0.16); pointer-events: none; z-index: 60; }
 .node-header { padding: 8px 12px; border-radius: 10px 10px 0 0; cursor: move; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
 .node-body { padding: 10px 12px; background: #1e2a4a; border-radius: 0 0 10px 10px; }
 .node-body label { font-size: 11px; color: #aaa; display: block; margin-bottom: 3px; }
@@ -64,6 +65,13 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .node-custom .node-body textarea { flex: 1; min-height: 40px; resize: none; }
 .node-custom .resize-handle { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; z-index: 10; }
 .node-custom .resize-handle::after { content: ''; position: absolute; right: 3px; bottom: 3px; width: 8px; height: 8px; border-right: 2px solid #555; border-bottom: 2px solid #555; }
+.node-note .node-header { background: linear-gradient(135deg, #8a6f19, #c9a227); color: #1a1a2e; }
+.node-note { display: flex; flex-direction: column; }
+.node-note .node-body { display: flex; flex-direction: column; position: relative; flex: 1; overflow: hidden; background: #2d2818; }
+.node-note .node-body label { flex-shrink: 0; color: #d9c980; }
+.node-note .node-body textarea { flex: 1; min-height: 70px; resize: none; background: #211d12; border-color: #5e4c16; color: #f4e8a4; }
+.node-note .resize-handle { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; z-index: 10; }
+.node-note .resize-handle::after { content: ''; position: absolute; right: 3px; bottom: 3px; width: 8px; height: 8px; border-right: 2px solid #8a6f19; border-bottom: 2px solid #8a6f19; }
 .node-splitter .node-header { background: linear-gradient(135deg, #b9770e, #f39c12); }
 .node-multiplier .node-header { background: linear-gradient(135deg, #1a5276, #2980b9); }
 .node-adder .node-header { background: linear-gradient(135deg, #196f3d, #2ecc71); }
@@ -110,6 +118,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.7; } }
 .auto-interval { width: 42px; padding: 3px 4px; border: 1px solid #333; border-radius: 3px; background: #16213e; color: #e0e0e0; font-size: 11px; text-align: center; }
 .auto-interval:focus { outline: none; border-color: #53a8b6; }
+.export-toggle { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #aaa; background: #0a1929; border-radius: 5px; padding: 5px 8px; white-space: nowrap; }
+.export-toggle input { margin: 0; }
 .auto-bar-track { width: 50px; height: 4px; background: #1b2838; border-radius: 2px; overflow: hidden; }
 .auto-bar-fill { width: 0%; height: 100%; background: #e67e22; border-radius: 2px; transition: width 0.1s linear; }
 .chart-scroll { flex: 1; overflow-y: auto; padding: 8px; }
@@ -206,6 +216,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
       <div class="sidebar-group-title">工具</div>
       <div class="sidebar-item" onclick="app.addNode('splitter')"><span class="dot" style="background:#f39c12"></span>分流器</div>
       <div class="sidebar-item" onclick="app.addNode('custom')"><span class="dot" style="background:#27ae60"></span>自定义节点</div>
+      <div class="sidebar-item" onclick="app.addNode('note')"><span class="dot" style="background:#c9a227"></span>便签</div>
       <div class="sidebar-item" onclick="app.addNode('probe')"><span class="dot" style="background:#e74c3c"></span>图表探针</div>
     </div>
     <div class="sidebar-actions">
@@ -221,7 +232,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
       <canvas class="grid-canvas" id="gridCanvas"></canvas>
       <svg class="connections-svg" id="connectionsSvg"></svg>
     </div>
-    <div class="empty-hint" id="emptyHint">从左侧栏拖拽节点到画布<br>从输出端口 (右侧圆点) 拖拽到输入端口 (左侧圆点) 连线<br>点击连线变红后再点删除 / 右键直接删除<br>按 Delete 键删除选中节点 / F5 运行<br>鼠标中键拖拽平移视图 / 空格键复位<br><br>点击左下角「演示数据」可快速体验</div>
+    <div class="empty-hint" id="emptyHint">从左侧栏拖拽节点到画布<br>从输出端口 (右侧圆点) 拖拽到输入端口 (左侧圆点) 连线<br>画布空白处左键拖拽框选，拖动已选节点可整体移动<br>点击连线变红后再点删除 / 右键直接删除<br>按 Delete 键删除选中节点 / F5 运行<br>鼠标中键拖拽平移视图 / 空格键复位<br><br>点击左下角「演示数据」可快速体验</div>
   </div>
   <div class="divider" id="divider"></div>
   <div class="chart-panel" id="chartPanel">
@@ -234,6 +245,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
           <span style="font-size:11px;color:#aaa;">秒</span>
           <div class="auto-bar-track"><div class="auto-bar-fill" id="autoBarFill"></div></div>
         </div>
+        <label class="export-toggle"><input type="checkbox" id="autoExportCsv" onchange="app.scheduleSave()">自动导出</label>
         <button class="run-btn" onclick="app.run()">▶ 运行 (F5)</button>
       </div>
     </div>
@@ -345,6 +357,13 @@ const NODE_DEFS = {
     params: [
       { id: 'code', label: 'JS 算法', type: 'code',
         default: '// signal: 输入数组\n// sampleRate: 采样率\n// 示例: 取绝对值\nreturn signal.map(v => Math.abs(v));' }
+    ]
+  },
+  note: {
+    type: 'note', title: '便签',
+    inputs: [], outputs: [],
+    params: [
+      { id: 'text', label: '内容', type: 'noteText', default: '写下备注...' }
     ]
   },
   splitter: {
@@ -548,7 +567,8 @@ const NODE_DEFS = {
     outputs: [],
     params: [
       { id: 'name', label: '文件名', type: 'text', default: 'signal_output' },
-      { id: 'info', label: '说明', type: 'info', default: '运行时自动下载 CSV' }
+      { id: 'autoExport', label: '允许自动导出', type: 'checkbox', default: false },
+      { id: 'info', label: '说明', type: 'info', default: '可手动导出；自动导出需同时打开右上角开关' }
     ]
   }
 };
@@ -575,6 +595,7 @@ class App {
     this.dragOffset = { x: 0, y: 0 };
     this.connecting = null;
     this.selectedNode = null;
+    this.selectedNodes = new Set();
     this.copiedNode = null;
     this.undoStack = [];
     this.redoStack = [];
@@ -584,6 +605,11 @@ class App {
     this.panOffset = { x: 0, y: 0 };
     this.canvasZoom = 1;
     this.sidebarDragType = null;
+    this.lastCanvasMousePoint = null;
+    this.marquee = null;
+    this.selectionBox = document.createElement('div');
+    this.selectionBox.className = 'selection-box';
+    this.canvasPanel.appendChild(this.selectionBox);
 
     this.initDivider();
     this.initEvents();
@@ -624,6 +650,8 @@ class App {
     this.connections = [];
     this.nodeCache.clear();
     this.probeData.clear();
+    this.selectedNodes.clear();
+    this.selectedNode = null;
 
     // Restore nodes
     for (const nd of bp.nodes) {
@@ -789,6 +817,7 @@ class App {
     // Mouse wheel zoom on canvas - zoom entire viewport
     this.canvasPanel.addEventListener('wheel', (e) => {
       if (e.target.closest('.sidebar') || e.target.closest('.chart-panel')) return;
+      if (e.target.closest('.node-body textarea, .node-body input, .node-body select')) return;
       e.preventDefault();
       const rect = this.canvasPanel.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
@@ -814,6 +843,7 @@ class App {
     });
 
     document.addEventListener('mousemove', (e) => {
+      this.updateLastCanvasMousePoint(e);
       if (this.panning) {
         const dx = e.clientX - this.panStart.x;
         const dy = e.clientY - this.panStart.y;
@@ -825,6 +855,9 @@ class App {
       if (this.connecting) {
         const rect = this.canvasPanel.getBoundingClientRect();
         this.drawTempConnection(e.clientX - rect.left, e.clientY - rect.top);
+      }
+      if (this.marquee) {
+        this.updateMarqueeSelection(e);
       }
     });
 
@@ -842,6 +875,9 @@ class App {
           this.cancelConnection();
         }
       }
+      if (this.marquee) {
+        this.finishMarqueeSelection(e);
+      }
     });
 
     this.canvasPanel.addEventListener('dragover', (e) => {
@@ -856,6 +892,7 @@ class App {
       e.preventDefault();
       const rect = this.canvasPanel.getBoundingClientRect();
       const point = this.panelToWorldPoint(e.clientX - rect.left, e.clientY - rect.top);
+      this.lastCanvasMousePoint = point;
       const node = this.addNode(type, point.x, point.y);
       if (node) this.selectNode(node.id);
       this.sidebarDragType = null;
@@ -871,8 +908,8 @@ class App {
       }
       const inInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
       // Delete selected node
-      if (e.key === 'Delete' && this.selectedNode && !inInput) {
-        this.removeNode(this.selectedNode);
+      if (e.key === 'Delete' && this.selectedNodes.size > 0 && !inInput) {
+        this.removeSelectedNodes();
       }
       // Space to reset view
       if (e.key === ' ' && !inInput) {
@@ -904,14 +941,11 @@ class App {
       // Ctrl+V paste node
       if ((e.ctrlKey || e.metaKey) && e.key === 'v' && this.copiedNode && !inInput) {
         e.preventDefault();
-        const node = this.addNode(this.copiedNode.type);
+        const pastePoint = this.lastCanvasMousePoint;
+        const node = this.addNode(this.copiedNode.type, pastePoint?.x, pastePoint?.y);
         if (node) {
           node.params = { ...this.copiedNode.params };
           if (this.copiedNode.data) node._data = [...this.copiedNode.data];
-          node.x += 30;
-          node.y += 30;
-          node.el.style.left = node.x + 'px';
-          node.el.style.top = node.y + 'px';
           // Update input fields
           node.el.querySelectorAll('input, textarea').forEach(inp => {
             const label = inp.previousElementSibling;
@@ -935,7 +969,8 @@ class App {
 
     this.canvasPanel.addEventListener('mousedown', (e) => {
       if (e.button === 0 && (e.target === this.canvasPanel || e.target === this.viewport || e.target === this.gridCanvas || e.target === this.svg)) {
-        this.selectNode(null);
+        this.blurActiveField();
+        this.startMarqueeSelection(e);
       }
     });
 
@@ -977,6 +1012,17 @@ class App {
       x: (x - this.panOffset.x) / this.canvasZoom,
       y: (y - this.panOffset.y) / this.canvasZoom
     };
+  }
+
+  updateLastCanvasMousePoint(e) {
+    const rect = this.canvasPanel.getBoundingClientRect();
+    if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
+    this.lastCanvasMousePoint = this.panelToWorldPoint(e.clientX - rect.left, e.clientY - rect.top);
+  }
+
+  blurActiveField() {
+    const active = document.activeElement;
+    if (active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) active.blur();
   }
 
   // ---- Node Management ----
@@ -1026,6 +1072,18 @@ class App {
     const maxPorts = Math.max(def.inputs.length, def.outputs.length, 1);
     body.style.minHeight = (maxPorts * 28 + 12) + 'px';
 
+    if (node.type === 'csvoutput') {
+      const exportBtn = document.createElement('button');
+      exportBtn.type = 'button';
+      exportBtn.textContent = '导出 CSV';
+      exportBtn.style.cssText = 'width:100%;padding:6px 10px;margin-bottom:8px;border:none;border-radius:4px;background:#148f77;color:white;cursor:pointer;font-size:12px;font-weight:600;';
+      exportBtn.onclick = (e) => {
+        e.stopPropagation();
+        this.exportCsvOutputNode(node.id);
+      };
+      body.appendChild(exportBtn);
+    }
+
     def.params.forEach(p => {
       const label = document.createElement('label');
       label.textContent = p.label;
@@ -1045,15 +1103,15 @@ class App {
         upload.appendChild(btn);
         upload.appendChild(inp);
         body.appendChild(upload);
-      } else if (p.type === 'code') {
+      } else if (p.type === 'code' || p.type === 'noteText') {
         const ta = document.createElement('textarea');
         ta.value = node.params[p.id];
-        ta.rows = 6;
+        ta.rows = p.type === 'noteText' ? 5 : 6;
         ta.spellcheck = false;
         ta.oninput = () => { node.params[p.id] = ta.value; this.scheduleSave(); };
         body.appendChild(ta);
-        // Resize handle for custom node
-        if (node.type === 'custom') {
+        // Resize handle for text-heavy nodes
+        if (node.type === 'custom' || node.type === 'note') {
           const handle = document.createElement('div');
           handle.className = 'resize-handle';
           let startX, startY, startW, startH;
@@ -1085,7 +1143,7 @@ class App {
         inp.type = 'number';
         inp.value = node.params[p.id];
         inp.min = 1;
-        inp.onchange = () => { node.params[p.id] = parseFloat(inp.value) || 0; this.scheduleSave(); };
+        inp.oninput = () => { node.params[p.id] = parseFloat(inp.value) || 0; this.scheduleSave(); };
         body.appendChild(inp);
       } else if (p.type === 'color') {
         const inp = document.createElement('input');
@@ -1098,6 +1156,19 @@ class App {
         inp.style.cursor = 'pointer';
         inp.oninput = () => { node.params[p.id] = inp.value; this.scheduleSave(); };
         body.appendChild(inp);
+      } else if (p.type === 'checkbox') {
+        const wrap = document.createElement('label');
+        wrap.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;margin-bottom:6px;';
+        label.remove();
+        const inp = document.createElement('input');
+        inp.type = 'checkbox';
+        inp.checked = node.params[p.id] === true;
+        inp.style.width = 'auto';
+        inp.style.margin = '0';
+        inp.onchange = () => { node.params[p.id] = inp.checked; this.scheduleSave(); };
+        wrap.appendChild(inp);
+        wrap.appendChild(document.createTextNode(p.label));
+        body.appendChild(wrap);
       } else if (p.type === 'select') {
         const sel = document.createElement('select');
         sel.style.cssText = 'width:100%;padding:4px 8px;border:1px solid #333;border-radius:4px;background:#16213e;color:#e0e0e0;font-size:12px;margin-bottom:6px;';
@@ -1172,24 +1243,33 @@ class App {
     header.addEventListener('mousedown', (e) => {
       if (e.target.tagName === 'BUTTON') return;
       e.preventDefault();
+      if (e.ctrlKey || e.metaKey) {
+        this.toggleNodeSelection(node.id);
+        return;
+      }
       this.draggingNode = node;
       const panelRect = this.canvasPanel.getBoundingClientRect();
-      this.dragOffset.x = (e.clientX - panelRect.left - this.panOffset.x) / this.canvasZoom - node.x;
-      this.dragOffset.y = (e.clientY - panelRect.top - this.panOffset.y) / this.canvasZoom - node.y;
-      this.selectNode(node.id);
-      el.style.zIndex = 20;
+      if (!this.selectedNodes.has(node.id)) this.selectNode(node.id);
+      const dragStart = this.panelToWorldPoint(e.clientX - panelRect.left, e.clientY - panelRect.top);
+      const movingNodes = this.getSelectedNodes().map(n => ({ node: n, x: n.x, y: n.y }));
+      movingNodes.forEach(item => { if (item.node.el) item.node.el.style.zIndex = 20; });
 
       const onMove = (ev) => {
         const panelRect = this.canvasPanel.getBoundingClientRect();
-        node.x = (ev.clientX - panelRect.left - this.panOffset.x) / this.canvasZoom - this.dragOffset.x;
-        node.y = (ev.clientY - panelRect.top - this.panOffset.y) / this.canvasZoom - this.dragOffset.y;
-        el.style.left = node.x + 'px';
-        el.style.top = node.y + 'px';
+        const point = this.panelToWorldPoint(ev.clientX - panelRect.left, ev.clientY - panelRect.top);
+        const dx = point.x - dragStart.x;
+        const dy = point.y - dragStart.y;
+        movingNodes.forEach(item => {
+          item.node.x = item.x + dx;
+          item.node.y = item.y + dy;
+          item.node.el.style.left = item.node.x + 'px';
+          item.node.el.style.top = item.node.y + 'px';
+        });
         this.renderConnections();
       };
       const onUp = () => {
         this.draggingNode = null;
-        el.style.zIndex = 10;
+        movingNodes.forEach(item => { if (item.node.el) item.node.el.style.zIndex = 10; });
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
         this.pushUndo();
@@ -1234,9 +1314,36 @@ class App {
     });
   }
 
+  getSelectedNodes() {
+    return this.nodes.filter(n => this.selectedNodes.has(n.id));
+  }
+
+  updateSelectionClasses() {
+    this.nodes.forEach(n => n.el && n.el.classList.toggle('selected', this.selectedNodes.has(n.id)));
+  }
+
   selectNode(id) {
-    this.nodes.forEach(n => n.el && n.el.classList.toggle('selected', n.id === id));
-    this.selectedNode = id;
+    this.selectedNodes.clear();
+    if (id !== null && id !== undefined) this.selectedNodes.add(id);
+    this.selectedNode = id || null;
+    this.updateSelectionClasses();
+  }
+
+  selectNodes(ids) {
+    this.selectedNodes = new Set(ids);
+    this.selectedNode = ids.length > 0 ? ids[ids.length - 1] : null;
+    this.updateSelectionClasses();
+  }
+
+  toggleNodeSelection(id) {
+    if (this.selectedNodes.has(id)) {
+      this.selectedNodes.delete(id);
+    } else {
+      this.selectedNodes.add(id);
+    }
+    const ids = [...this.selectedNodes];
+    this.selectedNode = ids.length > 0 ? ids[ids.length - 1] : null;
+    this.updateSelectionClasses();
   }
 
   removeNode(id) {
@@ -1245,10 +1352,93 @@ class App {
     const node = this.nodes.find(n => n.id === id);
     if (node && node.el) node.el.remove();
     this.nodes = this.nodes.filter(n => n.id !== id);
+    this.selectedNodes.delete(id);
     this.renderConnections();
     this.updateEmptyHint();
     if (this.selectedNode === id) this.selectedNode = null;
     this.scheduleSave();
+  }
+
+  removeSelectedNodes() {
+    const ids = [...this.selectedNodes];
+    if (ids.length === 0) return;
+    this.pushUndo();
+    const idSet = new Set(ids);
+    this.connections = this.connections.filter(c => !idSet.has(c.fromNode) && !idSet.has(c.toNode));
+    for (const node of this.nodes) {
+      if (idSet.has(node.id) && node.el) node.el.remove();
+    }
+    this.nodes = this.nodes.filter(n => !idSet.has(n.id));
+    this.selectedNodes.clear();
+    this.selectedNode = null;
+    this.renderConnections();
+    this.updateEmptyHint();
+    this.scheduleSave();
+  }
+
+  startMarqueeSelection(e) {
+    e.preventDefault();
+    const rect = this.canvasPanel.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    this.marquee = { startX: x, startY: y, active: false };
+    this.selectionBox.style.left = x + 'px';
+    this.selectionBox.style.top = y + 'px';
+    this.selectionBox.style.width = '0px';
+    this.selectionBox.style.height = '0px';
+    this.selectionBox.style.display = 'block';
+  }
+
+  updateMarqueeSelection(e) {
+    if (!this.marquee) return;
+    const rect = this.canvasPanel.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const left = Math.min(this.marquee.startX, x);
+    const top = Math.min(this.marquee.startY, y);
+    const width = Math.abs(x - this.marquee.startX);
+    const height = Math.abs(y - this.marquee.startY);
+    this.marquee.active = width > 3 || height > 3;
+    this.selectionBox.style.left = left + 'px';
+    this.selectionBox.style.top = top + 'px';
+    this.selectionBox.style.width = width + 'px';
+    this.selectionBox.style.height = height + 'px';
+
+    const start = this.panelToWorldPoint(this.marquee.startX, this.marquee.startY);
+    const end = this.panelToWorldPoint(x, y);
+    const worldRect = {
+      x: Math.min(start.x, end.x),
+      y: Math.min(start.y, end.y),
+      width: Math.abs(end.x - start.x),
+      height: Math.abs(end.y - start.y)
+    };
+    const ids = this.getNodesInSelection(worldRect).map(n => n.id);
+    this.selectNodes(ids);
+  }
+
+  finishMarqueeSelection(e) {
+    if (!this.marquee) return;
+    if (!this.marquee.active) this.selectNode(null);
+    this.marquee = null;
+    this.selectionBox.style.display = 'none';
+  }
+
+  getNodesInSelection(worldRect) {
+    return this.nodes.filter(node => {
+      if (!node.el) return false;
+      const nodeRect = {
+        x: node.x,
+        y: node.y,
+        width: node.el.offsetWidth,
+        height: node.el.offsetHeight
+      };
+      return !(
+        nodeRect.x + nodeRect.width < worldRect.x ||
+        nodeRect.x > worldRect.x + worldRect.width ||
+        nodeRect.y + nodeRect.height < worldRect.y ||
+        nodeRect.y > worldRect.y + worldRect.height
+      );
+    });
   }
 
   updateEmptyHint() {
@@ -1264,6 +1454,7 @@ class App {
     this.nodes = [];
     this.connections = [];
     this.selectedNode = null;
+    this.selectedNodes.clear();
     this.probeData.clear();
     this.nodeCache.clear();
     this.renderConnections();
@@ -1522,13 +1713,13 @@ class App {
     return (cached && cached[conn.fromPort]) || [];
   }
 
-  executeNode(node) {
+  executeNode(node, runOptions = {}) {
     if (this.nodeCache.has(node.id)) return;
     // Execute upstream first
     for (const conn of this.connections) {
       if (conn.toNode === node.id) {
         const upNode = this.nodes.find(n => n.id === conn.fromNode);
-        if (upNode) this.executeNode(upNode);
+        if (upNode) this.executeNode(upNode, runOptions);
       }
     }
 
@@ -1864,7 +2055,7 @@ class App {
       }
       case 'csvoutput': {
         const inp = this.getUpstreamData(node, 'in');
-        this.downloadCsvOutput(node, inp);
+        if (this.shouldExportCsvNode(node, runOptions)) this.downloadCsvOutput(node, inp);
         break;
       }
       case 'probe': {
@@ -1879,7 +2070,26 @@ class App {
     this.nodeCache.set(node.id, outputs);
   }
 
-  run() {
+  isAutoExportEnabled() {
+    return document.getElementById('autoExportCsv')?.checked === true;
+  }
+
+  shouldExportCsvNode(node, runOptions) {
+    if (runOptions.manualCsvExportNodeId !== undefined) {
+      return node.id === runOptions.manualCsvExportNodeId;
+    }
+    return runOptions.autoExportCsv === true && node.params.autoExport === true;
+  }
+
+  exportCsvOutputNode(nodeId) {
+    this.run({ manualCsvExportNodeId: nodeId, autoExportCsv: false });
+  }
+
+  run(options = {}) {
+    const runOptions = {
+      autoExportCsv: options.autoExportCsv !== undefined ? options.autoExportCsv : this.isAutoExportEnabled(),
+      manualCsvExportNodeId: options.manualCsvExportNodeId
+    };
     this.probeData.clear();
     this.nodeCache.clear();
     this.sampleRate = 1000;
@@ -1888,7 +2098,7 @@ class App {
     if (inputNodes.length === 0) { this.toast('请先添加 CSV 输入节点', 'error'); return; }
 
     // Execute all nodes
-    for (const node of this.nodes) this.executeNode(node);
+    for (const node of this.nodes) this.executeNode(node, runOptions);
 
     const connectedInputNodes = inputNodes.filter(n =>
       this.connections.some(c => c.fromNode === n.id && c.fromPort === 'out')
@@ -2277,6 +2487,7 @@ class App {
       panOffset: { ...this.panOffset },
       canvasZoom: this.canvasZoom || 1,
       autoInterval: parseFloat(document.getElementById('autoInterval').value) || 2,
+      autoExportCsv: document.getElementById('autoExportCsv')?.checked === true,
       chartZoom: this.chartZoom || 1,
       chartOffset: this.chartOffset || 0,
       chartOrder: this.chartDataList ? this.chartDataList.map(d => d.title) : [],
@@ -2303,6 +2514,8 @@ class App {
     this.connections = [];
     this.probeData.clear();
     this.nodeCache.clear();
+    this.selectedNodes.clear();
+    this.selectedNode = null;
 
     nodeIdCounter = json.nodeIdCounter || 0;
     this.sampleRate = json.sampleRate || 1000;
@@ -2311,6 +2524,7 @@ class App {
     if (json.autoInterval) {
       document.getElementById('autoInterval').value = json.autoInterval;
     }
+    document.getElementById('autoExportCsv').checked = json.autoExportCsv === true;
 
     // Restore chart zoom/offset
     this.chartZoom = json.chartZoom || 1;
