@@ -29,6 +29,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .connections-svg .conn-line { fill: none; stroke: #53a8b6; stroke-width: 2.5; pointer-events: none; transition: stroke 0.15s, stroke-width 0.15s; }
 .connections-svg .conn-group:hover .conn-line { stroke: #e94560; stroke-width: 3.5; }
 .connections-svg .conn-group.deleting .conn-line { stroke: #e94560; stroke-width: 3.5; stroke-dasharray: 6 3; }
+.connections-svg .conn-group.blocked .conn-line { stroke: #e94560; stroke-width: 3; stroke-dasharray: 7 4; }
 .connections-svg path.temp { fill: none; stroke: #e94560; stroke-dasharray: 8 4; stroke-width: 2; pointer-events: none; }
 
 /* ========== Nodes ========== */
@@ -73,6 +74,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .node-note .resize-handle { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; z-index: 10; }
 .node-note .resize-handle::after { content: ''; position: absolute; right: 3px; bottom: 3px; width: 8px; height: 8px; border-right: 2px solid #8a6f19; border-bottom: 2px solid #8a6f19; }
 .node-splitter .node-header { background: linear-gradient(135deg, #b9770e, #f39c12); }
+.node-switch .node-header { background: linear-gradient(135deg, #7d6608, #f1c40f); color: #1a1a2e; }
+.node-multiplexer .node-header { background: linear-gradient(135deg, #0e5f6f, #17a2b8); }
 .node-multiplier .node-header { background: linear-gradient(135deg, #1a5276, #2980b9); }
 .node-adder .node-header { background: linear-gradient(135deg, #196f3d, #2ecc71); }
 .node-subtractor .node-header { background: linear-gradient(135deg, #922b21, #e74c3c); }
@@ -215,9 +218,11 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
     <div class="sidebar-group">
       <div class="sidebar-group-title">工具</div>
       <div class="sidebar-item" onclick="app.addNode('splitter')"><span class="dot" style="background:#f39c12"></span>分流器</div>
+      <div class="sidebar-item" onclick="app.addNode('switch')"><span class="dot" style="background:#f1c40f"></span>开关</div>
+      <div class="sidebar-item" onclick="app.addNode('multiplexer')"><span class="dot" style="background:#17a2b8"></span>多路选择器</div>
       <div class="sidebar-item" onclick="app.addNode('custom')"><span class="dot" style="background:#27ae60"></span>自定义节点</div>
       <div class="sidebar-item" onclick="app.addNode('note')"><span class="dot" style="background:#c9a227"></span>便签</div>
-      <div class="sidebar-item" onclick="app.addNode('probe')"><span class="dot" style="background:#e74c3c"></span>图表探针</div>
+      <div class="sidebar-item" onclick="app.addNode('probe')"><span class="dot" style="background:#e74c3c"></span>示波器</div>
     </div>
     <div class="sidebar-actions">
       <button onclick="app.loadDemo()">📊 演示数据</button>
@@ -372,6 +377,24 @@ const NODE_DEFS = {
     outputs: [{ id: 'out1', label: '输出1' }, { id: 'out2', label: '输出2' }],
     params: []
   },
+  switch: {
+    type: 'switch', title: '开关',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'enabled', label: '允许通过', type: 'checkbox', default: true }
+    ]
+  },
+  multiplexer: {
+    type: 'multiplexer', title: '多路选择器',
+    inputs: [{ id: 'in1', label: '输入1' }, { id: 'in2', label: '输入2' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'count', label: '端口数量', type: 'number', default: 2, affectsPorts: true },
+      { id: 'mode', label: '方向', type: 'select', options: ['多入一出', '一入多出'], default: '多入一出', affectsPorts: true },
+      { id: 'routes', label: '启用通道', type: 'routeChecks', default: {} }
+    ]
+  },
   cutbeg: {
     type: 'cutbeg', title: 'Cut Beg',
     inputs: [{ id: 'in', label: '输入' }],
@@ -477,7 +500,10 @@ const NODE_DEFS = {
     type: 'normalizer', title: '归一化',
     inputs: [{ id: 'in', label: '输入' }],
     outputs: [{ id: 'out', label: '输出' }],
-    params: []
+    params: [
+      { id: 'mode', label: '范围模式', type: 'select', options: ['全部', '窗口'], default: '全部' },
+      { id: 'window', label: '窗口大小', type: 'number', default: 32, enabledWhen: { param: 'mode', value: '窗口' } }
+    ]
   },
   phaseshifter: {
     type: 'phaseshifter', title: '移相器',
@@ -553,11 +579,11 @@ const NODE_DEFS = {
     ]
   },
   probe: {
-    type: 'probe', title: '图表探针',
+    type: 'probe', title: '示波器',
     inputs: [{ id: 'in', label: '输入' }],
     outputs: [],
     params: [
-      { id: 'name', label: '探针名称', type: 'text', default: '' },
+      { id: 'name', label: '示波器名称', type: 'text', default: '' },
       { id: 'color', label: '颜色', type: 'color', default: '' }
     ]
   },
@@ -658,7 +684,8 @@ class App {
       const def = NODE_DEFS[nd.type];
       if (!def) continue;
       const node = { id: nd.id, type: nd.type, def, x: nd.x, y: nd.y, params: {}, _data: null, el: null };
-      def.params.forEach(p => { node.params[p.id] = nd.params[p.id] !== undefined ? nd.params[p.id] : p.default; });
+      def.params.forEach(p => { node.params[p.id] = nd.params[p.id] !== undefined ? this.cloneParamValue(nd.params[p.id]) : this.cloneParamValue(p.default); });
+      this.applyLegacyParamMigration(node, nd.params);
       if (nd.data) node._data = nd.data;
       if (nd.id >= nodeIdCounter) nodeIdCounter = nd.id + 1;
       this.nodes.push(node);
@@ -944,7 +971,7 @@ class App {
         const pastePoint = this.lastCanvasMousePoint;
         const node = this.addNode(this.copiedNode.type, pastePoint?.x, pastePoint?.y);
         if (node) {
-          node.params = { ...this.copiedNode.params };
+          node.params = Object.fromEntries(Object.entries(this.copiedNode.params).map(([key, value]) => [key, this.cloneParamValue(value)]));
           if (this.copiedNode.data) node._data = [...this.copiedNode.data];
           // Update input fields
           node.el.querySelectorAll('input, textarea').forEach(inp => {
@@ -1034,7 +1061,7 @@ class App {
     if (x === undefined) x = 60 + (this.nodes.length % 5) * 50;
     if (y === undefined) y = 80 + Math.floor(this.nodes.length / 5) * 40;
     const node = { id, type, def, x, y, params: {}, _data: null, el: null };
-    def.params.forEach(p => { node.params[p.id] = p.default; });
+    def.params.forEach(p => { node.params[p.id] = this.cloneParamValue(p.default); });
     this.nodes.push(node);
     this.renderNode(node);
     this.updateEmptyHint();
@@ -1042,8 +1069,69 @@ class App {
     return node;
   }
 
+  cloneParamValue(value) {
+    if (Array.isArray(value)) return [...value];
+    if (value && typeof value === 'object') return { ...value };
+    return value;
+  }
+
+  applyLegacyParamMigration(node, savedParams = {}) {
+    if (node.type === 'normalizer' && savedParams.global === false && node.params.mode === '全部') node.params.mode = '窗口';
+  }
+
+  getMultiplexerPortCount(node) {
+    return Math.max(1, Math.min(12, Math.floor(node.params.count || 1)));
+  }
+
+  getMultiplexerMode(node) {
+    return node.params.mode === '一入多出' ? '一入多出' : '多入一出';
+  }
+
+  getNodeInputs(node) {
+    if (node.type === 'multiplexer') {
+      const count = this.getMultiplexerPortCount(node);
+      if (this.getMultiplexerMode(node) === '一入多出') return [{ id: 'in', label: '输入' }];
+      return Array.from({ length: count }, (_, i) => ({ id: `in${i + 1}`, label: `输入${i + 1}` }));
+    }
+    return node.def.inputs;
+  }
+
+  getNodeOutputs(node) {
+    if (node.type === 'multiplexer') {
+      const count = this.getMultiplexerPortCount(node);
+      if (this.getMultiplexerMode(node) === '一入多出') return Array.from({ length: count }, (_, i) => ({ id: `out${i + 1}`, label: `输出${i + 1}` }));
+      return [{ id: 'out', label: '输出' }];
+    }
+    return node.def.outputs;
+  }
+
+  getNodePortIds(node, direction) {
+    return new Set((direction === 'in' ? this.getNodeInputs(node) : this.getNodeOutputs(node)).map(p => p.id));
+  }
+
+  pruneInvalidConnectionsForNode(node) {
+    const inputIds = this.getNodePortIds(node, 'in');
+    const outputIds = this.getNodePortIds(node, 'out');
+    this.connections = this.connections.filter(c => {
+      if (c.toNode === node.id && !inputIds.has(c.toPort)) return false;
+      if (c.fromNode === node.id && !outputIds.has(c.fromPort)) return false;
+      return true;
+    });
+  }
+
+  rerenderNode(node) {
+    this.pruneInvalidConnectionsForNode(node);
+    if (node.el) node.el.remove();
+    this.renderNode(node);
+    this.updatePortPositions(node);
+    this.updateSelectionClasses();
+    this.renderConnections();
+  }
+
   renderNode(node) {
     const def = node.def;
+    const inputs = this.getNodeInputs(node);
+    const outputs = this.getNodeOutputs(node);
     const el = document.createElement('div');
     el.className = `node node-${def.type}`;
     el.dataset.nodeId = node.id;
@@ -1069,7 +1157,7 @@ class App {
     // Body
     const body = document.createElement('div');
     body.className = 'node-body';
-    const maxPorts = Math.max(def.inputs.length, def.outputs.length, 1);
+    const maxPorts = Math.max(inputs.length, outputs.length, 1);
     body.style.minHeight = (maxPorts * 28 + 12) + 'px';
 
     if (node.type === 'csvoutput') {
@@ -1087,6 +1175,7 @@ class App {
     def.params.forEach(p => {
       const label = document.createElement('label');
       label.textContent = p.label;
+      this.markParamControl(label, p);
       body.appendChild(label);
 
       if (p.type === 'file') {
@@ -1143,7 +1232,12 @@ class App {
         inp.type = 'number';
         inp.value = node.params[p.id];
         inp.min = 1;
-        inp.oninput = () => { node.params[p.id] = parseFloat(inp.value) || 0; this.scheduleSave(); };
+        this.markParamControl(inp, p);
+        inp.oninput = () => {
+          node.params[p.id] = parseFloat(inp.value) || 0;
+          if (p.affectsPorts) this.rerenderNode(node);
+          this.scheduleSave();
+        };
         body.appendChild(inp);
       } else if (p.type === 'color') {
         const inp = document.createElement('input');
@@ -1165,13 +1259,16 @@ class App {
         inp.checked = node.params[p.id] === true;
         inp.style.width = 'auto';
         inp.style.margin = '0';
-        inp.onchange = () => { node.params[p.id] = inp.checked; this.scheduleSave(); };
+        inp.onchange = () => { node.params[p.id] = inp.checked; this.renderConnections(); this.scheduleSave(); };
         wrap.appendChild(inp);
         wrap.appendChild(document.createTextNode(p.label));
         body.appendChild(wrap);
+      } else if (p.type === 'routeChecks') {
+        this.renderRouteChecks(body, node, p);
       } else if (p.type === 'select') {
         const sel = document.createElement('select');
         sel.style.cssText = 'width:100%;padding:4px 8px;border:1px solid #333;border-radius:4px;background:#16213e;color:#e0e0e0;font-size:12px;margin-bottom:6px;';
+        this.markParamControl(sel, p);
         for (const opt of (p.options || [])) {
           const option = document.createElement('option');
           option.value = opt;
@@ -1179,7 +1276,12 @@ class App {
           if (opt === node.params[p.id]) option.selected = true;
           sel.appendChild(option);
         }
-        sel.onchange = () => { node.params[p.id] = sel.value; this.scheduleSave(); };
+        sel.onchange = () => {
+          node.params[p.id] = sel.value;
+          if (p.affectsPorts) this.rerenderNode(node);
+          this.syncParamControlStates(node, body);
+          this.scheduleSave();
+        };
         body.appendChild(sel);
       } else if (p.type === 'info') {
         const div = document.createElement('div');
@@ -1199,17 +1301,18 @@ class App {
         body.appendChild(inp);
       }
     });
+    this.syncParamControlStates(node, body);
 
     el.appendChild(body);
 
     // Input ports - positioned relative to body
-    def.inputs.forEach((port, i) => {
+    inputs.forEach((port, i) => {
       const p = document.createElement('div');
       p.className = 'port port-in';
       p.dataset.nodeId = node.id;
       p.dataset.portId = port.id;
       p.dataset.portIdx = i;
-      p.dataset.portTotal = def.inputs.length;
+      p.dataset.portTotal = inputs.length;
       const lbl = document.createElement('span');
       lbl.className = 'port-label';
       lbl.textContent = port.label;
@@ -1218,13 +1321,13 @@ class App {
     });
 
     // Output ports - positioned relative to body
-    def.outputs.forEach((port, i) => {
+    outputs.forEach((port, i) => {
       const p = document.createElement('div');
       p.className = 'port port-out';
       p.dataset.nodeId = node.id;
       p.dataset.portId = port.id;
       p.dataset.portIdx = i;
-      p.dataset.portTotal = def.outputs.length;
+      p.dataset.portTotal = outputs.length;
       const lbl = document.createElement('span');
       lbl.className = 'port-label';
       lbl.textContent = port.label;
@@ -1285,6 +1388,116 @@ class App {
     // Update port positions on resize
     const ro = new ResizeObserver(() => this.updatePortPositions(node));
     ro.observe(el);
+  }
+
+  markParamControl(control, p) {
+    control.dataset.paramId = p.id;
+    return control;
+  }
+
+  syncParamControlStates(node, body) {
+    for (const p of node.def.params) {
+      const disabled = p.enabledWhen && node.params[p.enabledWhen.param] !== p.enabledWhen.value;
+      body.querySelectorAll(`[data-param-id="${p.id}"]`).forEach(control => {
+        control.disabled = disabled;
+        control.style.opacity = disabled ? '0.45' : '';
+      });
+    }
+  }
+
+  renderRouteChecks(body, node, p) {
+    if (!node.params[p.id] || typeof node.params[p.id] !== 'object') node.params[p.id] = {};
+    const count = this.getMultiplexerPortCount(node);
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-direction:column;gap:4px;margin-bottom:6px;';
+    for (let i = 1; i <= count; i++) {
+      const row = document.createElement('label');
+      row.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:11px;color:#ccc;margin:0;';
+      const inp = document.createElement('input');
+      inp.type = 'checkbox';
+      inp.checked = this.isMultiplexerRouteEnabled(node, i);
+      inp.style.width = 'auto';
+      inp.style.margin = '0';
+      inp.onchange = () => {
+        if (inp.checked) {
+          this.setMultiplexerRoute(node, i);
+          this.updateMultiplexerRouteChecks(wrap, node);
+        } else {
+          inp.checked = true;
+        }
+        this.scheduleSave();
+      };
+      row.appendChild(inp);
+      row.appendChild(document.createTextNode(`通道 ${i}`));
+      wrap.appendChild(row);
+    }
+    this.renderMultiplexerRouteButtons(body, node, wrap);
+    body.appendChild(wrap);
+  }
+
+  renderMultiplexerRouteButtons(body, node, wrap) {
+    const bar = document.createElement('div');
+    bar.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;';
+    const makeButton = (text, onClick) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = text;
+      btn.style.cssText = 'flex:1;padding:4px 6px;border:none;border-radius:4px;background:#0f3460;color:#e0e0e0;cursor:pointer;font-size:11px;';
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        onClick();
+      };
+      bar.appendChild(btn);
+      return btn;
+    };
+    const prevBtn = makeButton('上一个', () => {
+      const count = this.getMultiplexerPortCount(node);
+      const current = this.getMultiplexerSelectedRoute(node);
+      const prev = current === 1 ? count : current - 1;
+      this.selectMultiplexerRoute(node, prev, wrap);
+    });
+    prevBtn.textContent = '上一个';
+    const nextBtn = makeButton('下一个', () => {
+      const count = this.getMultiplexerPortCount(node);
+      const current = this.getMultiplexerSelectedRoute(node);
+      const next = current === count ? 1 : current + 1;
+      this.selectMultiplexerRoute(node, next, wrap);
+    });
+    nextBtn.textContent = '下一个';
+    const randomBtn = makeButton('随机', () => {
+      const route = this.getRandomDifferentMultiplexerRoute(node);
+      this.selectMultiplexerRoute(node, route, wrap);
+    });
+    randomBtn.textContent = '随机';
+    randomBtn.onclick = (e) => {
+      e.stopPropagation();
+      const route = this.getRandomDifferentMultiplexerRoute(node);
+      this.selectMultiplexerRoute(node, route, wrap);
+    };
+    body.appendChild(bar);
+  }
+
+  getRandomDifferentMultiplexerRoute(node) {
+    const count = this.getMultiplexerPortCount(node);
+    if (count <= 1) return 1;
+    const current = this.getMultiplexerSelectedRoute(node);
+    let route;
+    do {
+      route = Math.floor(Math.random() * count) + 1;
+    } while (route === current);
+    return route;
+  }
+
+  selectMultiplexerRoute(node, route, wrap) {
+    this.setMultiplexerRoute(node, route);
+    this.updateMultiplexerRouteChecks(wrap, node);
+    this.scheduleSave();
+  }
+
+  updateMultiplexerRouteChecks(wrap, node) {
+    wrap.querySelectorAll('input[type="checkbox"]').forEach((inp, index) => {
+      inp.checked = this.isMultiplexerRouteEnabled(node, index + 1);
+    });
   }
 
   getNodeTitle(node) {
@@ -1655,8 +1868,31 @@ class App {
     return `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
   }
 
+  connectionKey(conn) {
+    return `${conn.fromNode}:${conn.fromPort}->${conn.toNode}:${conn.toPort}`;
+  }
+
+  getBlockedConnectionKeys() {
+    const blocked = new Set();
+    const queue = [];
+    for (const node of this.nodes) {
+      if (node.type === 'switch' && node.params.enabled === false) {
+        queue.push(...this.connections.filter(c => c.fromNode === node.id));
+      }
+    }
+    while (queue.length) {
+      const conn = queue.shift();
+      const key = this.connectionKey(conn);
+      if (blocked.has(key)) continue;
+      blocked.add(this.connectionKey(conn));
+      queue.push(...this.connections.filter(c => c.fromNode === conn.toNode));
+    }
+    return blocked;
+  }
+
   renderConnections() {
     while (this.svg.firstChild) this.svg.removeChild(this.svg.firstChild);
+    const blockedConnectionKeys = this.getBlockedConnectionKeys();
     for (const conn of this.connections) {
       const from = this.getPortPos(conn.fromNode, conn.fromPort);
       const to = this.getPortPos(conn.toNode, conn.toPort);
@@ -1664,6 +1900,7 @@ class App {
 
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       g.classList.add('conn-group');
+      if (blockedConnectionKeys.has(this.connectionKey(conn))) g.classList.add('blocked');
 
       // Wide invisible hit area for easy clicking
       const hit = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -1711,6 +1948,67 @@ class App {
     if (!conn) return [];
     const cached = this.nodeCache.get(conn.fromNode);
     return (cached && cached[conn.fromPort]) || [];
+  }
+
+  isInputBlocked(node, portId) {
+    const conn = this.connections.find(c => c.toNode === node.id && c.toPort === portId);
+    return conn ? this.getBlockedConnectionKeys().has(this.connectionKey(conn)) : false;
+  }
+
+  isMultiplexerRouteEnabled(node, i) {
+    return this.getMultiplexerSelectedRoute(node) === i;
+  }
+
+  getMultiplexerSelectedRoute(node) {
+    const count = this.getMultiplexerPortCount(node);
+    const routes = node.params.routes || {};
+    for (let i = 1; i <= count; i++) {
+      if (routes[`ch${i}`] === true) return i;
+    }
+    return 1;
+  }
+
+  setMultiplexerRoute(node, i) {
+    const count = this.getMultiplexerPortCount(node);
+    const selected = Math.max(1, Math.min(count, i));
+    node.params.routes = {};
+    node.params.routes[`ch${selected}`] = true;
+  }
+
+  mixSignals(signals) {
+    const maxLen = signals.reduce((max, signal) => Math.max(max, signal.length), 0);
+    const out = [];
+    for (let i = 0; i < maxLen; i++) {
+      let sum = 0;
+      for (const signal of signals) sum += signal[i] || 0;
+      out.push(sum);
+    }
+    return out;
+  }
+
+  normalizeGlobal(input) {
+    let min = Infinity, max = -Infinity;
+    for (const v of input) { if (v < min) min = v; if (v > max) max = v; }
+    const range = max - min;
+    return range === 0 ? input.map(() => 0) : input.map(v => 2 * (v - min) / range - 1);
+  }
+
+  normalizeWindow(input, windowSize) {
+    return input.map((v, i) => {
+      const start = Math.max(0, i - windowSize + 1);
+      let min = Infinity, max = -Infinity;
+      for (let j = start; j <= i; j++) {
+        const item = input[j];
+        if (item < min) min = item;
+        if (item > max) max = item;
+      }
+      const range = max - min;
+      return range === 0 ? 0 : 2 * (v - min) / range - 1;
+    });
+  }
+
+  getNormalizerMode(node) {
+    return node.params.mode === '窗口' ? '窗口' : '全部';
   }
 
   executeNode(node, runOptions = {}) {
@@ -1770,6 +2068,22 @@ class App {
         outputs['out2'] = [...inp];
         break;
       }
+      case 'switch': {
+        const inp = this.getUpstreamData(node, 'in');
+        outputs['out'] = node.params.enabled === false ? [] : [...inp];
+        break;
+      }
+      case 'multiplexer': {
+        const count = this.getMultiplexerPortCount(node);
+        const selectedRoute = this.getMultiplexerSelectedRoute(node);
+        if (this.getMultiplexerMode(node) === '一入多出') {
+          const inp = this.getUpstreamData(node, 'in');
+          for (let i = 1; i <= count; i++) outputs[`out${i}`] = this.isMultiplexerRouteEnabled(node, i) ? [...inp] : [];
+        } else {
+          outputs['out'] = [...this.getUpstreamData(node, `in${selectedRoute}`)];
+        }
+        break;
+      }
       case 'multiplier': {
         const a = this.getUpstreamData(node, 'a');
         const b = this.getUpstreamData(node, 'b');
@@ -1808,10 +2122,8 @@ class App {
       case 'normalizer': {
         const inp = this.getUpstreamData(node, 'in');
         if (!inp.length) { outputs['out'] = []; break; }
-        let min = Infinity, max = -Infinity;
-        for (const v of inp) { if (v < min) min = v; if (v > max) max = v; }
-        const range = max - min;
-        outputs['out'] = range === 0 ? inp.map(() => 0) : inp.map(v => 2 * (v - min) / range - 1);
+        const windowSize = Math.max(1, Math.floor(node.params.window || 1));
+        outputs['out'] = this.getNormalizerMode(node) === '窗口' ? this.normalizeWindow(inp, windowSize) : this.normalizeGlobal(inp);
         break;
       }
       case 'cutbeg': {
@@ -1932,11 +2244,17 @@ class App {
       case 'logmultiplier': {
         const inp = this.getUpstreamData(node, 'in');
         if (!inp.length) { outputs['out'] = []; break; }
-        let max = 0;
-        for (const v of inp) { const a = Math.abs(v); if (a > max) max = a; }
-        if (max === 0) { outputs['out'] = [...inp]; break; }
-        const logMax = Math.log(1 + max);
-        outputs['out'] = inp.map(v => v * Math.log(1 + Math.abs(v)) / logMax);
+        let maxAbs = 0;
+        for (const v of inp) { const a = Math.abs(v); if (a > maxAbs) maxAbs = a; }
+        if (maxAbs === 0) { outputs['out'] = [...inp]; break; }
+        const logMax = Math.log1p(maxAbs);
+        const out = inp.map(v => Math.sign(v) * Math.abs(v) * Math.log1p(Math.abs(v)) / logMax);
+        const signFlip = out.some((v, i) => inp[i] !== 0 && v !== 0 && Math.sign(v) !== Math.sign(inp[i]));
+        if (signFlip) {
+          console.error('Log multiplier sign flip', { nodeId: node.id, input: inp, output: out });
+          this.toast(`对数乘法器 #${node.id} 符号异常`, 'error');
+        }
+        outputs['out'] = out;
         break;
       }
       case 'abs': {
@@ -2059,8 +2377,9 @@ class App {
         break;
       }
       case 'probe': {
+        if (this.isInputBlocked(node, 'in')) break;
         const inp = this.getUpstreamData(node, 'in');
-        const name = node.params.name || `探针 #${node.id}`;
+        const name = node.params.name || `示波器 #${node.id}`;
         const color = node.params.color || this.randomColor();
         this.probeData.set(name, { data: inp, color });
         break;
@@ -2085,6 +2404,23 @@ class App {
     this.run({ manualCsvExportNodeId: nodeId, autoExportCsv: false });
   }
 
+  isConnectionActiveForInputChart(conn) {
+    const target = this.nodes.find(n => n.id === conn.toNode);
+    if (target && target.type === 'multiplexer' && this.getMultiplexerMode(target) === '多入一出') {
+      const match = conn.toPort.match(/^in(\d+)$/);
+      if (match) return this.getMultiplexerSelectedRoute(target) === parseInt(match[1]);
+    }
+    return true;
+  }
+
+  isInputSignalVisible(node) {
+    return this.connections.some(c =>
+      c.fromNode === node.id &&
+      c.fromPort === 'out' &&
+      this.isConnectionActiveForInputChart(c)
+    );
+  }
+
   run(options = {}) {
     const runOptions = {
       autoExportCsv: options.autoExportCsv !== undefined ? options.autoExportCsv : this.isAutoExportEnabled(),
@@ -2100,9 +2436,7 @@ class App {
     // Execute all nodes
     for (const node of this.nodes) this.executeNode(node, runOptions);
 
-    const connectedInputNodes = inputNodes.filter(n =>
-      this.connections.some(c => c.fromNode === n.id && c.fromPort === 'out')
-    );
+    const connectedInputNodes = inputNodes.filter(n => this.isInputSignalVisible(n));
 
     const inputSignals = [];
     for (const [index, node] of connectedInputNodes.entries()) {
@@ -2240,7 +2574,7 @@ class App {
       } else {
         targetNode = this.nodes.find(n => {
           if (n.type !== 'probe') return false;
-          const name = n.params.name || `探针 #${n.id}`;
+          const name = n.params.name || `示波器 #${n.id}`;
           return name === title;
         });
       }
@@ -2394,7 +2728,12 @@ class App {
 
     let min = Infinity, max = -Infinity;
     for (const v of visible) { if (v < min) min = v; if (v > max) max = v; }
-    if (min === max) { min -= 1; max += 1; }
+    const labelMin = min, labelMax = max;
+    if (min === max) {
+      const padValue = Math.max(Math.abs(min) * 0.1, 1e-6);
+      min -= padValue;
+      max += padValue;
+    }
     const range = max - min;
     const pad = 10;
 
@@ -2437,8 +2776,8 @@ class App {
     ctx.fillStyle = '#666';
     ctx.font = '10px sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(max.toFixed(2), 4, 14);
-    ctx.fillText(min.toFixed(2), 4, dh - 4);
+    ctx.fillText(labelMax.toFixed(4), 4, 14);
+    ctx.fillText(labelMin.toFixed(4), 4, dh - 4);
     ctx.textAlign = 'right';
     ctx.fillText(`${this.chartZoom.toFixed(1)}x`, dw - 4, 14);
 
@@ -2546,7 +2885,8 @@ class App {
       const def = NODE_DEFS[nd.type];
       if (!def) continue;
       const node = { id: nd.id, type: nd.type, def, x: nd.x, y: nd.y, params: {}, _data: null, el: null };
-      def.params.forEach(p => { node.params[p.id] = nd.params[p.id] !== undefined ? nd.params[p.id] : p.default; });
+      def.params.forEach(p => { node.params[p.id] = nd.params[p.id] !== undefined ? this.cloneParamValue(nd.params[p.id]) : this.cloneParamValue(p.default); });
+      this.applyLegacyParamMigration(node, nd.params);
       if (nd.data) node._data = nd.data;
       if (nd.id >= nodeIdCounter) nodeIdCounter = nd.id + 1;
       this.nodes.push(node);
