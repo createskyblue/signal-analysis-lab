@@ -1095,7 +1095,7 @@ class App {
       p.addEventListener('mousedown', (e) => {
         e.stopPropagation();
         e.preventDefault();
-        this.startConnection(node.id, port.id, p);
+        this.startConnection(node.id, port.id);
       });
 
       el.appendChild(p);
@@ -1277,25 +1277,30 @@ class App {
   }
 
   // ---- Connections ----
-  startConnection(fromNodeId, fromPortId, portEl) {
-    const node = this.nodes.find(n => n.id === fromNodeId);
-    const port = portEl;
+  startConnection(fromNodeId, fromPortId) {
     const tempPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     tempPath.classList.add('temp');
     this.svg.appendChild(tempPath);
-    // Use viewport coordinates + SVG offset
+    const start = this.getPortPos(fromNodeId, fromPortId);
     this.connecting = {
       fromNodeId, fromPortId,
-      startX: node.x + port.offsetLeft + 7 + 5000,
-      startY: node.y + port.offsetTop + 7 + 5000,
+      startX: start.x,
+      startY: start.y,
       tempPath
     };
   }
 
-  drawTempConnection(mx, my) {
+  panelToSvgPoint(x, y) {
+    return {
+      x: (x - this.panOffset.x) / this.canvasZoom + 5000,
+      y: (y - this.panOffset.y) / this.canvasZoom + 5000
+    };
+  }
+
+  drawTempConnection(panelX, panelY) {
     if (!this.connecting) return;
-    // Convert viewport coordinates to SVG coordinates
-    this.connecting.tempPath.setAttribute('d', this.bezierPath(this.connecting.startX, this.connecting.startY, mx + 5000, my + 5000));
+    const end = this.panelToSvgPoint(panelX, panelY);
+    this.connecting.tempPath.setAttribute('d', this.bezierPath(this.connecting.startX, this.connecting.startY, end.x, end.y));
   }
 
   finishConnection(toNodeId, toPortId) {
