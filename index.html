@@ -59,6 +59,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .node-highpass .node-header { background: linear-gradient(135deg, #7d3c98, #bb8fce); }
 .node-bandpass .node-header { background: linear-gradient(135deg, #5b2c6f, #8e44ad); }
 .node-weighted .node-header { background: linear-gradient(135deg, #4a235a, #7d3c98); }
+.node-firlinear .node-header { background: linear-gradient(135deg, #154360, #5dade2); }
 .node-custom .node-header { background: linear-gradient(135deg, #1e8449, #27ae60); }
 .node-custom { display: flex; flex-direction: column; }
 .node-custom .node-body { display: flex; flex-direction: column; position: relative; flex: 1; overflow: hidden; }
@@ -91,6 +92,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .node-limiter .node-header { background: linear-gradient(135deg, #922b21, #c0392b); }
 .node-phaseshifter .node-header { background: linear-gradient(135deg, #6c3483, #8e44ad); }
 .node-logmultiplier .node-header { background: linear-gradient(135deg, #1a5276, #2980b9); }
+.node-entropy .node-header { background: linear-gradient(135deg, #7d6608, #f4d03f); color: #1a1a2e; }
+.node-squarewave .node-header { background: linear-gradient(135deg, #9a5b00, #f39c12); color: #1a1a2e; }
 .node-abs .node-header { background: linear-gradient(135deg, #0e6655, #16a085); }
 .node-hysteresis .node-header { background: linear-gradient(135deg, #922b21, #e74c3c); }
 .node-kalman .node-header { background: linear-gradient(135deg, #1a5276, #2980b9); }
@@ -176,7 +179,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
       <div class="sidebar-item" onclick="app.addNode('lowpass')"><span class="dot" style="background:#a569bd"></span>低通滤波</div>
       <div class="sidebar-item" onclick="app.addNode('highpass')"><span class="dot" style="background:#bb8fce"></span>高通滤波</div>
       <div class="sidebar-item" onclick="app.addNode('bandpass')"><span class="dot" style="background:#8e44ad"></span>带通滤波</div>
-      <div class="sidebar-item" onclick="app.addNode('weighted')"><span class="dot" style="background:#7d3c98"></span>加权滤波</div>
+      <div class="sidebar-item" onclick="app.addNode('weighted')"><span class="dot" style="background:#7d3c98"></span>一阶 IIR 平滑</div>
+      <div class="sidebar-item" onclick="app.addNode('firlinear')"><span class="dot" style="background:#5dade2"></span>FIR 线性相位</div>
     </div>
     <div class="sidebar-group">
       <div class="sidebar-group-title">运算器</div>
@@ -202,6 +206,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
       <div class="sidebar-item" onclick="app.addNode('minwin')"><span class="dot" style="background:#2980b9"></span>Min Win</div>
       <div class="sidebar-item" onclick="app.addNode('medianwin')"><span class="dot" style="background:#8e44ad"></span>中值窗口</div>
       <div class="sidebar-item" onclick="app.addNode('extremewin')"><span class="dot" style="background:#e67e22"></span>极值窗口</div>
+      <div class="sidebar-item" onclick="app.addNode('entropy')"><span class="dot" style="background:#f4d03f"></span>因果窗口熵</div>
+      <div class="sidebar-item" onclick="app.addNode('squarewave')"><span class="dot" style="background:#f39c12"></span>矩形波检测器</div>
     </div>
     <div class="sidebar-group">
       <div class="sidebar-group-title">池化降采样</div>
@@ -303,6 +309,133 @@ const DSP = {
       out.push(out[i - 1] * w + signal[i] * (1 - w));
     }
     return out;
+  },
+
+  firLinearLowpassCoefficients(cutoff, sampleRate, taps) {
+    const n = Math.max(3, taps);
+    const fc = Math.max(0.000001, Math.min(cutoff / sampleRate, 0.499999));
+    const mid = (n - 1) / 2;
+    const coeffs = [];
+    for (let i = 0; i < n; i++) {
+      const x = i - mid;
+      const sinc = x === 0 ? 2 * fc : Math.sin(2 * Math.PI * fc * x) / (Math.PI * x);
+      const window = 0.54 - 0.46 * Math.cos(2 * Math.PI * i / (n - 1));
+      coeffs.push(sinc * window);
+    }
+    const sum = coeffs.reduce((acc, v) => acc + v, 0);
+    if (sum !== 0) for (let i = 0; i < coeffs.length; i++) coeffs[i] /= sum;
+    return coeffs;
+  },
+
+  firFilter(signal, coeffs) {
+    if (!signal.length || !coeffs.length) return [];
+    const center = Math.floor(coeffs.length / 2);
+    const out = [];
+    for (let i = 0; i < signal.length; i++) {
+      let acc = 0;
+      for (let k = 0; k < coeffs.length; k++) {
+        const idx = i + k - center;
+        if (idx >= 0 && idx < signal.length) acc += signal[idx] * coeffs[k];
+      }
+      out.push(acc);
+    }
+    return out;
+  },
+
+  causalWindowEntropy(signal, windowSize, bins) {
+    if (!signal.length) return [];
+    const binCount = Math.max(1, Math.floor(bins || 1));
+    const size = Math.max(1, Math.floor(windowSize || 1));
+    return signal.map((_, i) => {
+      const start = Math.max(0, i - size + 1);
+      let min = Infinity, max = -Infinity;
+      for (let j = start; j <= i; j++) {
+        const v = signal[j];
+        if (v < min) min = v;
+        if (v > max) max = v;
+      }
+      if (min === max) return 0;
+      const hist = new Array(binCount).fill(0);
+      const range = max - min;
+      for (let j = start; j <= i; j++) {
+        const idx = Math.min(binCount - 1, Math.floor((signal[j] - min) / range * binCount));
+        hist[idx]++;
+      }
+      const len = i - start + 1;
+      let entropy = 0;
+      for (const count of hist) {
+        if (!count) continue;
+        const p = count / len;
+        entropy -= p * Math.log2(p);
+      }
+      return entropy;
+    });
+  },
+
+  causalSquareWaveMetrics(signal, windowSize, thresholdMode, manualThreshold, minEdges) {
+    const score = [], period = [], duty = [], jitterOut = [];
+    const size = Math.max(2, Math.floor(windowSize || 2));
+    const requiredEdges = Math.max(2, Math.floor(minEdges || 2));
+    const mean = values => values.reduce((sum, v) => sum + v, 0) / values.length;
+    const stddev = values => {
+      const avg = mean(values);
+      return Math.sqrt(values.reduce((sum, v) => sum + (v - avg) ** 2, 0) / values.length);
+    };
+    for (let i = 0; i < signal.length; i++) {
+      const start = Math.max(0, i - size + 1);
+      let min = Infinity, max = -Infinity;
+      for (let j = start; j <= i; j++) {
+        const v = signal[j];
+        if (v < min) min = v;
+        if (v > max) max = v;
+      }
+      const threshold = thresholdMode === '手动' ? manualThreshold : (min + max) / 2;
+      if (min === max) {
+        score.push(0); period.push(0); duty.push(0); jitterOut.push(1);
+        continue;
+      }
+      const edges = [];
+      let prev = signal[start] >= threshold ? 1 : 0;
+      for (let j = start + 1; j <= i; j++) {
+        const state = signal[j] >= threshold ? 1 : 0;
+        if (state !== prev) edges.push({ index: j, type: state === 1 ? 'rise' : 'fall' });
+        prev = state;
+      }
+      if (edges.length < requiredEdges) {
+        score.push(0); period.push(0); duty.push(0); jitterOut.push(1);
+        continue;
+      }
+      const cycles = [];
+      for (let e = 0; e < edges.length; e++) {
+        if (edges[e].type !== 'rise') continue;
+        const nextRise = edges.slice(e + 1).find(edge => edge.type === 'rise');
+        if (!nextRise) continue;
+        const fall = edges.slice(e + 1).find(edge => edge.type === 'fall' && edge.index < nextRise.index);
+        if (!fall) continue;
+        const p = nextRise.index - edges[e].index;
+        if (p > 0) cycles.push({ period: p, duty: (fall.index - edges[e].index) / p });
+      }
+      if (cycles.length < 2) {
+        score.push(0); period.push(0); duty.push(0); jitterOut.push(1);
+        continue;
+      }
+      const periods = cycles.map(c => c.period);
+      const duties = cycles.map(c => c.duty);
+      const periodMean = mean(periods);
+      const dutyMean = mean(duties);
+      const periodStd = stddev(periods);
+      const dutyStd = stddev(duties);
+      const jitterValue = periodMean === 0 ? 1 : periodStd / periodMean;
+      const jitter = periodMean === 0 ? 1 : periodStd / periodMean;
+      const regularity = 1 / (1 + jitter * 5);
+      const dutyStability = 1 / (1 + dutyStd * 10);
+      const scoreValue = Math.max(0, Math.min(1, regularity * dutyStability));
+      score.push(scoreValue);
+      period.push(periodMean);
+      duty.push(dutyMean);
+      jitterOut.push(jitterValue);
+    }
+    return { score, period, duty, jitter: jitterOut };
   }
 };
 
@@ -348,11 +481,20 @@ const NODE_DEFS = {
     ]
   },
   weighted: {
-    type: 'weighted', title: '加权滤波器',
+    type: 'weighted', title: '一阶 IIR 平滑',
     inputs: [{ id: 'in', label: '输入' }],
     outputs: [{ id: 'out', label: '输出' }],
     params: [
-      { id: 'weight', label: '权重 (前值系数, 0~1)', type: 'number', default: 0.9 }
+      { id: 'weight', label: '反馈系数 w (0~1)', type: 'number', default: 0.9 }
+    ]
+  },
+  firlinear: {
+    type: 'firlinear', title: 'FIR 线性相位滤波器',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'cutoff', label: '截止频率 (Hz)', type: 'number', default: 50 },
+      { id: 'taps', label: '抽头数量 (奇数)', type: 'number', default: 31 }
     ]
   },
   custom: {
@@ -382,6 +524,7 @@ const NODE_DEFS = {
     inputs: [{ id: 'in', label: '输入' }],
     outputs: [{ id: 'out', label: '输出' }],
     params: [
+      { id: 'count', label: '端口数量', type: 'number', default: 1, affectsPorts: true },
       { id: 'enabled', label: '允许通过', type: 'checkbox', default: true }
     ]
   },
@@ -519,6 +662,31 @@ const NODE_DEFS = {
     outputs: [{ id: 'out', label: '输出' }],
     params: [
       { id: '_info', label: '', type: 'info', default: 'out = x·log(1+|x|)/log(1+max)' }
+    ]
+  },
+  entropy: {
+    type: 'entropy', title: '因果窗口信息熵',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'window', label: '窗口大小', type: 'number', default: 32 },
+      { id: 'bins', label: '分桶数量', type: 'number', default: 16 }
+    ]
+  },
+  squarewave: {
+    type: 'squarewave', title: '矩形波检测器',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [
+      { id: 'score', label: '规律度' },
+      { id: 'period', label: '周期' },
+      { id: 'duty', label: '占空比' },
+      { id: 'jitter', label: '抖动' }
+    ],
+    params: [
+      { id: 'window', label: '窗口大小', type: 'number', default: 128 },
+      { id: 'thresholdMode', label: '阈值模式', type: 'select', options: ['自动', '手动'], default: '自动' },
+      { id: 'threshold', label: '手动阈值', type: 'number', default: 0, enabledWhen: { param: 'thresholdMode', value: '手动' } },
+      { id: 'minEdges', label: '最少边沿数', type: 'number', default: 4 }
     ]
   },
   abs: {
@@ -954,43 +1122,15 @@ class App {
         this.redo();
       }
       // Ctrl+C copy node
-      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && this.selectedNode && !inInput) {
-        const node = this.nodes.find(n => n.id === this.selectedNode);
-        if (node) {
-          this.copiedNode = {
-            type: node.type,
-            params: { ...node.params },
-            data: node._data ? [...node._data] : null
-          };
-          this.toast(`已复制: ${node.def.title}`, 'info');
-        }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && this.selectedNodes.size > 0 && !inInput) {
+        e.preventDefault();
+        this.copySelectedNodes();
       }
       // Ctrl+V paste node
       if ((e.ctrlKey || e.metaKey) && e.key === 'v' && this.copiedNode && !inInput) {
         e.preventDefault();
         const pastePoint = this.lastCanvasMousePoint;
-        const node = this.addNode(this.copiedNode.type, pastePoint?.x, pastePoint?.y);
-        if (node) {
-          node.params = Object.fromEntries(Object.entries(this.copiedNode.params).map(([key, value]) => [key, this.cloneParamValue(value)]));
-          if (this.copiedNode.data) node._data = [...this.copiedNode.data];
-          // Update input fields
-          node.el.querySelectorAll('input, textarea').forEach(inp => {
-            const label = inp.previousElementSibling;
-            if (label && label.tagName === 'LABEL') {
-              const paramDef = node.def.params.find(p => p.label === label.textContent);
-              if (paramDef && node.params[paramDef.id] !== undefined) {
-                inp.value = node.params[paramDef.id];
-              }
-            }
-          });
-          this.updateNodeTitle(node);
-          if (node.type === 'input' && node._data) {
-            const lbl = document.getElementById(`fileLabel-${node.id}`);
-            if (lbl) lbl.textContent = `已复制 ${node._data.length} 点`;
-          }
-          this.selectNode(node.id);
-          this.toast(`已粘贴: ${node.def.title}`, 'info');
-        }
+        this.pasteCopiedNodes(pastePoint);
       }
     });
 
@@ -1057,7 +1197,7 @@ class App {
     const def = NODE_DEFS[type];
     if (!def) return;
     this.pushUndo();
-    const id = ++nodeIdCounter;
+    const id = this.getNextNodeId();
     if (x === undefined) x = 60 + (this.nodes.length % 5) * 50;
     if (y === undefined) y = 80 + Math.floor(this.nodes.length / 5) * 40;
     const node = { id, type, def, x, y, params: {}, _data: null, el: null };
@@ -1067,6 +1207,12 @@ class App {
     this.updateEmptyHint();
     this.scheduleSave();
     return node;
+  }
+
+  getNextNodeId() {
+    const maxExistingId = this.nodes.reduce((max, node) => Math.max(max, node.id), 0);
+    nodeIdCounter = Math.max(nodeIdCounter, maxExistingId) + 1;
+    return nodeIdCounter;
   }
 
   cloneParamValue(value) {
@@ -1087,7 +1233,16 @@ class App {
     return node.params.mode === '一入多出' ? '一入多出' : '多入一出';
   }
 
+  getSwitchPortCount(node) {
+    return Math.max(1, Math.min(12, Math.floor(node.params.count || 1)));
+  }
+
   getNodeInputs(node) {
+    if (node.type === 'switch') {
+      const count = this.getSwitchPortCount(node);
+      if (count === 1) return [{ id: 'in', label: '输入' }];
+      return Array.from({ length: count }, (_, i) => ({ id: `in${i + 1}`, label: `输入${i + 1}` }));
+    }
     if (node.type === 'multiplexer') {
       const count = this.getMultiplexerPortCount(node);
       if (this.getMultiplexerMode(node) === '一入多出') return [{ id: 'in', label: '输入' }];
@@ -1097,6 +1252,11 @@ class App {
   }
 
   getNodeOutputs(node) {
+    if (node.type === 'switch') {
+      const count = this.getSwitchPortCount(node);
+      if (count === 1) return [{ id: 'out', label: '输出' }];
+      return Array.from({ length: count }, (_, i) => ({ id: `out${i + 1}`, label: `输出${i + 1}` }));
+    }
     if (node.type === 'multiplexer') {
       const count = this.getMultiplexerPortCount(node);
       if (this.getMultiplexerMode(node) === '一入多出') return Array.from({ length: count }, (_, i) => ({ id: `out${i + 1}`, label: `输出${i + 1}` }));
@@ -1422,6 +1582,7 @@ class App {
         if (inp.checked) {
           this.setMultiplexerRoute(node, i);
           this.updateMultiplexerRouteChecks(wrap, node);
+          this.renderConnections();
         } else {
           inp.checked = true;
         }
@@ -1491,6 +1652,7 @@ class App {
   selectMultiplexerRoute(node, route, wrap) {
     this.setMultiplexerRoute(node, route);
     this.updateMultiplexerRouteChecks(wrap, node);
+    this.renderConnections();
     this.scheduleSave();
   }
 
@@ -1587,6 +1749,80 @@ class App {
     this.renderConnections();
     this.updateEmptyHint();
     this.scheduleSave();
+  }
+
+  copySelectedNodes() {
+    const selected = this.getSelectedNodes();
+    if (!selected.length) return;
+    const selectedIds = new Set(selected.map(n => n.id));
+    this.copiedNode = {
+      nodes: selected.map(n => ({
+        id: n.id,
+        type: n.type,
+        x: n.x,
+        y: n.y,
+        params: Object.fromEntries(Object.entries(n.params).map(([key, value]) => [key, this.cloneParamValue(value)])),
+        data: n._data ? [...n._data] : null
+      })),
+      connections: this.connections.filter(c => selectedIds.has(c.fromNode) && selectedIds.has(c.toNode)).map(c => ({ ...c })),
+      centerX: selected.reduce((sum, n) => sum + n.x, 0) / selected.length,
+      centerY: selected.reduce((sum, n) => sum + n.y, 0) / selected.length
+    };
+    this.toast(`已复制 ${selected.length} 个节点`, 'info');
+  }
+
+  pasteCopiedNodes(pastePoint) {
+    if (!this.copiedNode || !this.copiedNode.nodes || !this.copiedNode.nodes.length) return;
+    this.pushUndo();
+    const target = pastePoint || { x: this.copiedNode.centerX + 30, y: this.copiedNode.centerY + 30 };
+    const idMap = new Map();
+    const pastedIds = [];
+    for (const item of this.copiedNode.nodes) {
+      const x = target.x + item.x - this.copiedNode.centerX;
+      const y = target.y + item.y - this.copiedNode.centerY;
+      const node = this.addNode(item.type, x, y);
+      if (!node) continue;
+      node.params = Object.fromEntries(Object.entries(item.params).map(([key, value]) => [key, this.cloneParamValue(value)]));
+      if (item.data) node._data = [...item.data];
+      this.refreshNodeControls(node);
+      this.updateNodeTitle(node);
+      if (node.type === 'input' && node._data) {
+        const lbl = document.getElementById(`fileLabel-${node.id}`);
+        if (lbl) lbl.textContent = `已复制 ${node._data.length} 点`;
+      }
+      idMap.set(item.id, node.id);
+      pastedIds.push(node.id);
+    }
+    for (const conn of this.copiedNode.connections) {
+      if (idMap.has(conn.fromNode) && idMap.has(conn.toNode)) {
+        this.connections.push({ fromNode: idMap.get(conn.fromNode), fromPort: conn.fromPort, toNode: idMap.get(conn.toNode), toPort: conn.toPort });
+      }
+    }
+    for (const id of pastedIds) {
+      const node = this.nodes.find(n => n.id === id);
+      if (node) this.updatePortPositions(node);
+    }
+    this.renderConnections();
+    this.selectNodes(pastedIds);
+    this.scheduleSave();
+    this.toast(`已粘贴 ${pastedIds.length} 个节点`, 'info');
+  }
+
+  refreshNodeControls(node) {
+    if (!node.el) return;
+    for (const p of node.def.params) {
+      const controls = node.el.querySelectorAll(`[data-param-id="${p.id}"]`);
+      controls.forEach(control => {
+        if (control.tagName === 'INPUT') {
+          if (control.type === 'checkbox') control.checked = node.params[p.id] === true;
+          else if (control.type !== 'file') control.value = node.params[p.id];
+        } else if (control.tagName === 'TEXTAREA' || control.tagName === 'SELECT') {
+          control.value = node.params[p.id];
+        }
+      });
+    }
+    const body = node.el.querySelector('.node-body');
+    if (body) this.syncParamControlStates(node, body);
   }
 
   startMarqueeSelection(e) {
@@ -1872,6 +2108,18 @@ class App {
     return `${conn.fromNode}:${conn.fromPort}->${conn.toNode}:${conn.toPort}`;
   }
 
+  getBlockedOutgoingConnections(node, incomingConn) {
+    if (!node) return [];
+    if (node.type === 'multiplexer') {
+      const selectedRoute = this.getMultiplexerSelectedRoute(node);
+      if (this.getMultiplexerMode(node) === '一入多出') {
+        return incomingConn.toPort === 'in' ? this.connections.filter(c => c.fromNode === node.id && c.fromPort === `out${selectedRoute}`) : [];
+      }
+      return incomingConn.toPort === `in${selectedRoute}` ? this.connections.filter(c => c.fromNode === node.id && c.fromPort === 'out') : [];
+    }
+    return this.connections.filter(c => c.fromNode === node.id);
+  }
+
   getBlockedConnectionKeys() {
     const blocked = new Set();
     const queue = [];
@@ -1885,7 +2133,8 @@ class App {
       const key = this.connectionKey(conn);
       if (blocked.has(key)) continue;
       blocked.add(this.connectionKey(conn));
-      queue.push(...this.connections.filter(c => c.fromNode === conn.toNode));
+      const node = this.nodes.find(n => n.id === conn.toNode);
+      queue.push(...this.getBlockedOutgoingConnections(node, conn));
     }
     return blocked;
   }
@@ -2011,6 +2260,11 @@ class App {
     return node.params.mode === '窗口' ? '窗口' : '全部';
   }
 
+  getOddTapCount(value) {
+    const taps = Math.max(3, Math.floor(value || 3));
+    return taps % 2 === 0 ? taps + 1 : taps;
+  }
+
   executeNode(node, runOptions = {}) {
     if (this.nodeCache.has(node.id)) return;
     // Execute upstream first
@@ -2049,6 +2303,14 @@ class App {
         outputs['out'] = inp.length ? DSP.weighted(inp, w) : [];
         break;
       }
+      case 'firlinear': {
+        const inp = this.getUpstreamData(node, 'in');
+        const taps = this.getOddTapCount(node.params.taps || 31);
+        const cutoff = node.params.cutoff || 50;
+        const coeffs = DSP.firLinearLowpassCoefficients(cutoff, this.sampleRate, taps);
+        outputs['out'] = inp.length ? DSP.firFilter(inp, coeffs) : [];
+        break;
+      }
       case 'custom': {
         const inp = this.getUpstreamData(node, 'in');
         try {
@@ -2069,8 +2331,13 @@ class App {
         break;
       }
       case 'switch': {
-        const inp = this.getUpstreamData(node, 'in');
-        outputs['out'] = node.params.enabled === false ? [] : [...inp];
+        const count = this.getSwitchPortCount(node);
+        for (let i = 1; i <= count; i++) {
+          const inPort = count === 1 ? 'in' : `in${i}`;
+          const outPort = count === 1 ? 'out' : `out${i}`;
+          const inp = this.getUpstreamData(node, inPort);
+          outputs[outPort] = node.params.enabled === false ? [] : [...inp];
+        }
         break;
       }
       case 'multiplexer': {
@@ -2257,6 +2524,26 @@ class App {
         outputs['out'] = out;
         break;
       }
+      case 'entropy': {
+        const inp = this.getUpstreamData(node, 'in');
+        const windowSize = Math.max(1, Math.floor(node.params.window || 1));
+        const bins = Math.max(1, Math.floor(node.params.bins || 1));
+        outputs['out'] = inp.length ? DSP.causalWindowEntropy(inp, windowSize, bins) : [];
+        break;
+      }
+      case 'squarewave': {
+        const inp = this.getUpstreamData(node, 'in');
+        const windowSize = Math.max(2, Math.floor(node.params.window || 2));
+        const thresholdMode = node.params.thresholdMode || '自动';
+        const threshold = node.params.threshold !== undefined ? node.params.threshold : 0;
+        const minEdges = Math.max(2, Math.floor(node.params.minEdges || 2));
+        const metrics = inp.length ? DSP.causalSquareWaveMetrics(inp, windowSize, thresholdMode, threshold, minEdges) : { score: [], period: [], duty: [], jitter: [] };
+        outputs['score'] = metrics.score;
+        outputs['period'] = metrics.period;
+        outputs['duty'] = metrics.duty;
+        outputs['jitter'] = metrics.jitter;
+        break;
+      }
       case 'abs': {
         const inp = this.getUpstreamData(node, 'in');
         outputs['out'] = inp.map(v => Math.abs(v));
@@ -2381,7 +2668,7 @@ class App {
         const inp = this.getUpstreamData(node, 'in');
         const name = node.params.name || `示波器 #${node.id}`;
         const color = node.params.color || this.randomColor();
-        this.probeData.set(name, { data: inp, color });
+        this.probeData.set(node.id, { title: name, data: inp, color, nodeId: node.id });
         break;
       }
     }
@@ -2473,17 +2760,17 @@ class App {
     }
 
     // Reorder probes based on saved order
-    let orderedProbes = [...this.probeData.entries()];
+    let orderedProbes = [...this.probeData.values()];
     if (this._savedChartOrder && this._savedChartOrder.length > 0) {
       orderedProbes.sort((a, b) => {
-        const ia = this._savedChartOrder.indexOf(a[0]);
-        const ib = this._savedChartOrder.indexOf(b[0]);
+        const ia = this._savedChartOrder.indexOf(a.nodeId);
+        const ib = this._savedChartOrder.indexOf(b.nodeId);
         return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
       });
     }
-    for (const [name, { data, color }] of orderedProbes) {
-      if (data.length > 0) {
-        this.addChartItem(container, name, data, color);
+    for (const probe of orderedProbes) {
+      if (probe.data.length > 0) {
+        this.addChartItem(container, probe.title, probe.data, probe.color, probe.nodeId);
       }
     }
 
@@ -2549,7 +2836,7 @@ class App {
       }
       this.chartDataList = newOrder;
       // Save order for persistence
-      this._savedChartOrder = newOrder.map(d => d.title);
+      this._savedChartOrder = newOrder.map(d => d.nodeId !== null ? d.nodeId : d.title);
       this.scheduleSave();
     });
     item.addEventListener('dragover', (e) => {
@@ -2571,12 +2858,6 @@ class App {
       let targetNode = null;
       if (nodeId !== null) {
         targetNode = this.nodes.find(n => n.id === nodeId);
-      } else {
-        targetNode = this.nodes.find(n => {
-          if (n.type !== 'probe') return false;
-          const name = n.params.name || `示波器 #${n.id}`;
-          return name === title;
-        });
       }
       if (targetNode) this.focusNode(targetNode);
     });
