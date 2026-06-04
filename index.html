@@ -88,6 +88,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .node-minwin .node-header { background: linear-gradient(135deg, #1a5276, #2980b9); }
 .node-extremewin .node-header { background: linear-gradient(135deg, #a04000, #e67e22); }
 .node-probe .node-header { background: linear-gradient(135deg, #c0392b, #e74c3c); }
+.node-csvoutput .node-header { background: linear-gradient(135deg, #0e6251, #148f77); }
 
 /* ========== Ports ========== */
 .port { position: absolute; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #53a8b6; background: #1a1a2e; cursor: crosshair; z-index: 15; transition: all 0.15s; }
@@ -205,6 +206,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
       <div class="sidebar-item" onclick="app.addNode('splitter')"><span class="dot" style="background:#f39c12"></span>分流器</div>
       <div class="sidebar-item" onclick="app.addNode('custom')"><span class="dot" style="background:#27ae60"></span>自定义节点</div>
       <div class="sidebar-item" onclick="app.addNode('probe')"><span class="dot" style="background:#e74c3c"></span>图表探针</div>
+      <div class="sidebar-item" onclick="app.addNode('csvoutput')"><span class="dot" style="background:#148f77"></span>CSV 输出</div>
     </div>
     <div class="sidebar-actions">
       <button onclick="app.loadDemo()">📊 演示数据</button>
@@ -298,6 +300,7 @@ const NODE_DEFS = {
     inputs: [],
     outputs: [{ id: 'out', label: '输出' }],
     params: [
+      { id: 'note', label: '备注名', type: 'text', default: '' },
       { id: 'samplerate', label: '采样率 (Hz)', type: 'number', default: 1000 },
       { id: 'file', label: '波形数据', type: 'file' }
     ]
@@ -537,6 +540,15 @@ const NODE_DEFS = {
     params: [
       { id: 'name', label: '探针名称', type: 'text', default: '' },
       { id: 'color', label: '颜色', type: 'color', default: '' }
+    ]
+  },
+  csvoutput: {
+    type: 'csvoutput', title: 'CSV 输出',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [],
+    params: [
+      { id: 'name', label: '文件名', type: 'text', default: 'signal_output' },
+      { id: 'info', label: '说明', type: 'info', default: '运行时自动下载 CSV' }
     ]
   }
 };
@@ -891,6 +903,7 @@ class App {
               }
             }
           });
+          this.updateNodeTitle(node);
           if (node.type === 'input' && node._data) {
             const lbl = document.getElementById(`fileLabel-${node.id}`);
             if (lbl) lbl.textContent = `已复制 ${node._data.length} 点`;
@@ -947,7 +960,10 @@ class App {
     // Header
     const header = document.createElement('div');
     header.className = 'node-header';
-    header.innerHTML = `<span>${def.title}</span>`;
+    const title = document.createElement('span');
+    title.className = 'node-title';
+    title.textContent = this.getNodeTitle(node);
+    header.appendChild(title);
     el.appendChild(header);
 
     // Delete button
@@ -1057,7 +1073,11 @@ class App {
         inp.type = 'text';
         inp.value = node.params[p.id];
         inp.placeholder = p.default || '';
-        inp.onchange = () => { node.params[p.id] = inp.value; this.scheduleSave(); };
+        inp.oninput = () => {
+          node.params[p.id] = inp.value;
+          this.updateNodeTitle(node);
+          this.scheduleSave();
+        };
         body.appendChild(inp);
       }
     });
@@ -1140,6 +1160,18 @@ class App {
     ro.observe(el);
   }
 
+  getNodeTitle(node) {
+    if (node.type === 'input' && node.params.note) return `${node.def.title} - ${node.params.note}`;
+    if (node.type === 'csvoutput' && node.params.name) return `${node.def.title} - ${node.params.name}`;
+    return node.def.title;
+  }
+
+  updateNodeTitle(node) {
+    if (!node.el) return;
+    const title = node.el.querySelector('.node-title');
+    if (title) title.textContent = this.getNodeTitle(node);
+  }
+
   updatePortPositions(node) {
     const el = node.el;
     if (!el) return;
@@ -1218,6 +1250,44 @@ class App {
       this.scheduleSave();
     };
     reader.readAsText(file);
+  }
+
+  formatTimestamp(date = new Date()) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+  }
+
+  sanitizeFileName(name) {
+    return String(name || 'signal_output')
+      .trim()
+      .replace(/[\\/:*?"<>|]+/g, '_')
+      .replace(/\s+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'signal_output';
+  }
+
+  escapeCsvValue(value) {
+    const text = String(value ?? '');
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  }
+
+  toCsvRows(name, timestamp, data) {
+    const rows = [['name', 'timestamp', 'index', 'value']];
+    if (!data.length) rows.push([name, timestamp, '', '']);
+    data.forEach((value, index) => rows.push([name, timestamp, index, value]));
+    return rows.map(row => row.map(v => this.escapeCsvValue(v)).join(',')).join('\n');
+  }
+
+  downloadCsvOutput(node, data) {
+    const name = node.params.name || `CSV输出_${node.id}`;
+    const timestamp = this.formatTimestamp();
+    const csv = this.toCsvRows(name, timestamp, data);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${this.sanitizeFileName(name)}_${timestamp}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   // ---- Demo Data ----
@@ -1745,6 +1815,11 @@ class App {
         outputs['out'] = out;
         break;
       }
+      case 'csvoutput': {
+        const inp = this.getUpstreamData(node, 'in');
+        this.downloadCsvOutput(node, inp);
+        break;
+      }
       case 'probe': {
         const inp = this.getUpstreamData(node, 'in');
         const name = node.params.name || `探针 #${node.id}`;
@@ -1768,19 +1843,29 @@ class App {
     // Execute all nodes
     for (const node of this.nodes) this.executeNode(node);
 
-    // Collect input data for chart header
-    let inputData = [];
-    for (const node of inputNodes) {
+    const connectedInputNodes = inputNodes.filter(n =>
+      this.connections.some(c => c.fromNode === n.id && c.fromPort === 'out')
+    );
+
+    const inputSignals = [];
+    for (const [index, node] of connectedInputNodes.entries()) {
       const cached = this.nodeCache.get(node.id);
-      if (cached && cached.out) inputData = cached.out;
+      if (cached && cached.out) {
+        inputSignals.push({
+          title: this.getInputChartTitle(node),
+          data: cached.out,
+          color: this.getInputChartColor(index),
+          nodeId: node.id
+        });
+      }
     }
 
-    this.renderChart(inputData);
+    this.renderChart(inputSignals);
     this.toast('运行完成', 'success');
   }
 
   // ---- Chart Rendering ----
-  renderChart(inputData) {
+  renderChart(inputSignals = []) {
     this.chartDataList = []; // { title, data, color, canvas }
     // Preserve zoom/offset across re-runs
     if (!this.chartZoom) this.chartZoom = 1;
@@ -1790,8 +1875,10 @@ class App {
     const container = this.chartScroll;
     container.innerHTML = '';
 
-    if (inputData.length > 0) {
-      this.addChartItem(container, '输入信号', inputData, '#2e86c1');
+    for (const signal of inputSignals) {
+      if (signal.data.length > 0) {
+        this.addChartItem(container, signal.title, signal.data, signal.color, signal.nodeId);
+      }
     }
 
     // Reorder probes based on saved order
@@ -1824,14 +1911,27 @@ class App {
     this.redrawCharts();
   }
 
-  addChartItem(container, title, data, color) {
+  getInputChartTitle(node) {
+    return node.params.note ? `输入信号 - ${node.params.note}` : `输入信号 #${node.id}`;
+  }
+
+  getInputChartColor(index) {
+    const colors = ['#2e86c1', '#16a085', '#f39c12', '#af7ac5', '#e67e22', '#5dade2'];
+    return colors[index % colors.length];
+  }
+
+  addChartItem(container, title, data, color, nodeId = null) {
     const item = document.createElement('div');
     item.className = 'chart-item';
     item.draggable = true;
     const label = document.createElement('div');
     label.className = 'chart-item-title';
     label.style.cursor = 'grab';
-    label.innerHTML = `<span class="dot" style="background:${color}"></span>${title} (${data.length} 点)`;
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = color;
+    label.appendChild(dot);
+    label.appendChild(document.createTextNode(`${title} (${data.length} 点)`));
     item.appendChild(label);
     const canvas = document.createElement('canvas');
     canvas.style.height = '120px';
@@ -1878,8 +1978,8 @@ class App {
     // Click to navigate to corresponding node
     canvas.addEventListener('click', () => {
       let targetNode = null;
-      if (title === '输入信号') {
-        targetNode = this.nodes.find(n => n.type === 'input');
+      if (nodeId !== null) {
+        targetNode = this.nodes.find(n => n.id === nodeId);
       } else {
         targetNode = this.nodes.find(n => {
           if (n.type !== 'probe') return false;
@@ -1891,7 +1991,7 @@ class App {
     });
 
     container.appendChild(item);
-    this.chartDataList.push({ title, data, color, canvas });
+    this.chartDataList.push({ title, data, color, canvas, nodeId });
   }
 
   focusNode(node) {
