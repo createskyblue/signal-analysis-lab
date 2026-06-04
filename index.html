@@ -154,8 +154,9 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
   <div class="sidebar" id="sidebar">
     <div class="sidebar-title">信号处理实验室</div>
     <div class="sidebar-group">
-      <div class="sidebar-group-title">输入</div>
+      <div class="sidebar-group-title">输入和输出</div>
       <div class="sidebar-item" onclick="app.addNode('input')"><span class="dot" style="background:#2e86c1"></span>CSV 输入</div>
+      <div class="sidebar-item" onclick="app.addNode('csvoutput')"><span class="dot" style="background:#148f77"></span>CSV 输出</div>
     </div>
     <div class="sidebar-group">
       <div class="sidebar-group-title">滤波器</div>
@@ -206,7 +207,6 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
       <div class="sidebar-item" onclick="app.addNode('splitter')"><span class="dot" style="background:#f39c12"></span>分流器</div>
       <div class="sidebar-item" onclick="app.addNode('custom')"><span class="dot" style="background:#27ae60"></span>自定义节点</div>
       <div class="sidebar-item" onclick="app.addNode('probe')"><span class="dot" style="background:#e74c3c"></span>图表探针</div>
-      <div class="sidebar-item" onclick="app.addNode('csvoutput')"><span class="dot" style="background:#148f77"></span>CSV 输出</div>
     </div>
     <div class="sidebar-actions">
       <button onclick="app.loadDemo()">📊 演示数据</button>
@@ -221,7 +221,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
       <canvas class="grid-canvas" id="gridCanvas"></canvas>
       <svg class="connections-svg" id="connectionsSvg"></svg>
     </div>
-    <div class="empty-hint" id="emptyHint">从左侧栏选择节点添加到画布<br>从输出端口 (右侧圆点) 拖拽到输入端口 (左侧圆点) 连线<br>点击连线变红后再点删除 / 右键直接删除<br>按 Delete 键删除选中节点 / F5 运行<br>鼠标中键拖拽平移视图 / 空格键复位<br><br>点击左下角「演示数据」可快速体验</div>
+    <div class="empty-hint" id="emptyHint">从左侧栏拖拽节点到画布<br>从输出端口 (右侧圆点) 拖拽到输入端口 (左侧圆点) 连线<br>点击连线变红后再点删除 / 右键直接删除<br>按 Delete 键删除选中节点 / F5 运行<br>鼠标中键拖拽平移视图 / 空格键复位<br><br>点击左下角「演示数据」可快速体验</div>
   </div>
   <div class="divider" id="divider"></div>
   <div class="chart-panel" id="chartPanel">
@@ -583,9 +583,11 @@ class App {
     this.panStart = { x: 0, y: 0 };
     this.panOffset = { x: 0, y: 0 };
     this.canvasZoom = 1;
+    this.sidebarDragType = null;
 
     this.initDivider();
     this.initEvents();
+    this.initSidebarDrag();
     this.resize();
     this.drawGrid();
 
@@ -842,6 +844,23 @@ class App {
       }
     });
 
+    this.canvasPanel.addEventListener('dragover', (e) => {
+      if (!this.sidebarDragType) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    });
+
+    this.canvasPanel.addEventListener('drop', (e) => {
+      const type = this.sidebarDragType || e.dataTransfer.getData('application/x-node-type');
+      if (!type || !NODE_DEFS[type]) return;
+      e.preventDefault();
+      const rect = this.canvasPanel.getBoundingClientRect();
+      const point = this.panelToWorldPoint(e.clientX - rect.left, e.clientY - rect.top);
+      const node = this.addNode(type, point.x, point.y);
+      if (node) this.selectNode(node.id);
+      this.sidebarDragType = null;
+    });
+
     document.addEventListener('keydown', (e) => {
       // F5 to run - always active
       if (e.key === 'F5') {
@@ -926,10 +945,38 @@ class App {
     });
   }
 
+  initSidebarDrag() {
+    document.querySelectorAll('.sidebar-item[onclick^="app.addNode"]').forEach(item => {
+      const match = item.getAttribute('onclick').match(/app\.addNode\('([^']+)'\)/);
+      if (!match) return;
+      const type = match[1];
+      item.draggable = true;
+      item.dataset.nodeType = type;
+      item.onclick = null;
+      item.removeAttribute('onclick');
+      item.addEventListener('dragstart', (e) => {
+        this.sidebarDragType = type;
+        e.dataTransfer.effectAllowed = 'copy';
+        e.dataTransfer.setData('application/x-node-type', type);
+        e.dataTransfer.setData('text/plain', NODE_DEFS[type]?.title || type);
+      });
+      item.addEventListener('dragend', () => {
+        this.sidebarDragType = null;
+      });
+    });
+  }
+
   // ---- Viewport Transform ----
   applyViewportTransform() {
     this.viewport.style.transform = `translate(${this.panOffset.x}px, ${this.panOffset.y}px) scale(${this.canvasZoom})`;
     this.viewport.style.transformOrigin = '0 0';
+  }
+
+  panelToWorldPoint(x, y) {
+    return {
+      x: (x - this.panOffset.x) / this.canvasZoom,
+      y: (y - this.panOffset.y) / this.canvasZoom
+    };
   }
 
   // ---- Node Management ----
