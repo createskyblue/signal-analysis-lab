@@ -6,14 +6,31 @@
 <title>信号处理实验室</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #1a1a2e; color: #e0e0e0; }
+:root {
+  --vscode-bg: #1e1e1e;
+  --vscode-side: #252526;
+  --vscode-panel: #181818;
+  --vscode-tab: #2d2d30;
+  --vscode-border: #3c3c3c;
+  --vscode-text: #cccccc;
+  --vscode-muted: #858585;
+  --vscode-input: #3c3c3c;
+  --vscode-input-bg: #1f1f1f;
+  --vscode-hover: #2a2d2e;
+  --vscode-accent: #007acc;
+  --vscode-accent-soft: #3794ff;
+  --vscode-danger: #f14c4c;
+  --vscode-success: #6a9955;
+  --vscode-warning: #cca700;
+}
+html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; background: var(--vscode-bg); color: var(--vscode-text); }
 
 /* ========== Layout ========== */
 .app { display: flex; width: 100%; height: 100%; }
-.canvas-panel { flex: 1 1 75%; position: relative; overflow: hidden; background: #16213e; }
-.divider { width: 5px; cursor: col-resize; background: #0f3460; transition: background 0.2s; z-index: 100; flex-shrink: 0; }
-.divider:hover, .divider.dragging { background: #e94560; }
-.chart-panel { flex: 1 1 25%; position: relative; background: #1a1a2e; display: flex; flex-direction: column; }
+.canvas-panel { flex: 1 1 75%; position: relative; overflow: hidden; background: var(--vscode-bg); }
+.divider { width: 5px; cursor: col-resize; background: var(--vscode-border); transition: background 0.2s; z-index: 100; flex-shrink: 0; }
+.divider:hover, .divider.dragging { background: var(--vscode-accent); }
+.chart-panel { flex: 1 1 25%; position: relative; background: var(--vscode-panel); display: flex; flex-direction: column; border-left: 1px solid var(--vscode-border); }
 
 /* ========== Toolbar (removed - using sidebar) ========== */
 
@@ -26,143 +43,163 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 /* ========== SVG Connections ========== */
 .connections-svg { position: absolute; left: -5000px; top: -5000px; width: 10000px; height: 10000px; pointer-events: none; z-index: 5; }
 .connections-svg .conn-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
-.connections-svg .conn-line { fill: none; stroke: #53a8b6; stroke-width: 2.5; pointer-events: none; transition: stroke 0.15s, stroke-width 0.15s; }
-.connections-svg .conn-group:hover .conn-line { stroke: #e94560; stroke-width: 3.5; }
-.connections-svg .conn-group.deleting .conn-line { stroke: #e94560; stroke-width: 3.5; stroke-dasharray: 6 3; }
-.connections-svg .conn-group.blocked .conn-line { stroke: #e94560; stroke-width: 3; stroke-dasharray: 7 4; }
-.connections-svg path.temp { fill: none; stroke: #e94560; stroke-dasharray: 8 4; stroke-width: 2; pointer-events: none; }
+.connections-svg .conn-line { fill: none; stroke: var(--vscode-accent-soft); stroke-width: 2.5; pointer-events: none; transition: stroke 0.15s, stroke-width 0.15s; }
+.connections-svg .conn-group:hover .conn-line { stroke: var(--vscode-accent); stroke-width: 3.5; }
+.connections-svg .conn-group.deleting .conn-line { stroke: var(--vscode-danger); stroke-width: 3.5; stroke-dasharray: 6 3; }
+.connections-svg .conn-group.blocked .conn-line { stroke: var(--vscode-danger); stroke-width: 3; stroke-dasharray: 7 4; }
+.connections-svg path.temp { fill: none; stroke: var(--vscode-accent); stroke-dasharray: 8 4; stroke-width: 2; pointer-events: none; }
 
 /* ========== Nodes ========== */
-.node { position: absolute; min-width: 200px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); z-index: 10; user-select: none; }
-.node:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.6); }
-.node.selected { box-shadow: 0 0 0 2px #e94560, 0 6px 20px rgba(0,0,0,0.6); }
-.selection-box { position: absolute; display: none; border: 1px solid #e94560; background: rgba(233,69,96,0.16); pointer-events: none; z-index: 60; }
-.node-header { padding: 8px 12px; border-radius: 10px 10px 0 0; cursor: move; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
-.node-body { padding: 10px 12px; background: #1e2a4a; border-radius: 0 0 10px 10px; }
-.node-body label { font-size: 11px; color: #aaa; display: block; margin-bottom: 3px; }
-.node-body input, .node-body select { width: 100%; padding: 4px 8px; border: 1px solid #333; border-radius: 4px; background: #16213e; color: #e0e0e0; font-size: 12px; margin-bottom: 6px; }
-.node-body textarea { width: 100%; padding: 6px 8px; border: 1px solid #333; border-radius: 4px; background: #16213e; color: #e0e0e0; font-size: 11px; font-family: 'Consolas', monospace; resize: vertical; min-height: 60px; margin-bottom: 6px; }
-.node-body input:focus, .node-body textarea:focus, .node-body select:focus { outline: none; border-color: #53a8b6; }
+.node { position: absolute; min-width: 200px; border-radius: 6px; border: 1px solid var(--vscode-border); border-top: 3px solid var(--node-color, var(--vscode-accent)); box-shadow: 0 3px 10px rgba(0,0,0,0.35); z-index: 10; user-select: none; background: var(--vscode-tab); }
+.node:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.45); border-color: #4b4b4b; }
+.node.selected { box-shadow: 0 0 0 2px var(--vscode-accent), 0 6px 16px rgba(0,0,0,0.45); }
+.selection-box { position: absolute; display: none; border: 1px solid var(--vscode-accent); background: rgba(0,122,204,0.18); pointer-events: none; z-index: 60; }
+.node-header { padding: 8px 12px; border-radius: 3px 5px 0 0; cursor: move; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; background: var(--vscode-tab); color: var(--vscode-text); border-bottom: 1px solid var(--vscode-border); }
+.node-body { padding: 10px 12px; background: var(--vscode-side); border-radius: 0 0 5px 3px; }
+.node-body label { font-size: 11px; color: var(--vscode-muted); display: block; margin-bottom: 3px; }
+.node-body input, .node-body select { width: 100%; padding: 4px 8px; border: 1px solid var(--vscode-input); border-radius: 3px; background: var(--vscode-input-bg); color: var(--vscode-text); font-size: 12px; margin-bottom: 6px; }
+.node-body select { appearance: none; -webkit-appearance: none; -moz-appearance: none; background-color: var(--vscode-input-bg); background-image: linear-gradient(45deg, transparent 50%, var(--vscode-muted) 50%), linear-gradient(135deg, var(--vscode-muted) 50%, transparent 50%); background-position: calc(100% - 13px) 50%, calc(100% - 8px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; padding-right: 24px; color-scheme: dark; }
+.node-body select option { background: var(--vscode-input-bg); color: var(--vscode-text); }
+.node-body textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--vscode-input); border-radius: 3px; background: var(--vscode-input-bg); color: var(--vscode-text); font-size: 11px; font-family: 'Consolas', monospace; resize: vertical; min-height: 60px; margin-bottom: 6px; }
+.node-body input:focus, .node-body textarea:focus, .node-body select:focus { outline: none; border-color: var(--vscode-accent); }
+.param-select { position: relative; width: 100%; margin-bottom: 6px; }
+.param-select-button { width: 100%; padding: 4px 24px 4px 8px; border: 1px solid var(--vscode-input); border-radius: 3px; background: var(--vscode-input-bg); color: var(--vscode-text); font-size: 12px; text-align: left; cursor: pointer; position: relative; }
+.param-select-button::after { content: ''; position: absolute; right: 9px; top: 50%; width: 6px; height: 6px; border-right: 1px solid var(--vscode-muted); border-bottom: 1px solid var(--vscode-muted); transform: translateY(-65%) rotate(45deg); pointer-events: none; }
+.param-select-button:focus { outline: none; border-color: var(--vscode-border); }
+.param-select-button:disabled { cursor: default; }
+.param-select-menu { display: none; position: absolute; top: calc(100% + 2px); left: 0; right: 0; max-height: 160px; overflow-y: auto; border: 1px solid var(--vscode-border); border-radius: 3px; background: var(--vscode-input-bg); box-shadow: 0 6px 16px rgba(0,0,0,0.35); z-index: 80; }
+.param-select.open .param-select-menu { display: block; }
+.param-select-option { padding: 5px 8px; color: var(--vscode-text); background: var(--vscode-input-bg); font-size: 12px; cursor: pointer; }
+.param-select-option:hover, .param-select-option.selected { background: var(--vscode-hover); color: var(--vscode-text); }
 .node-body .file-upload { position: relative; overflow: hidden; display: inline-block; width: 100%; }
 .node-body .file-upload input[type="file"] { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-.node-body .file-btn { padding: 5px 10px; background: #0f3460; border-radius: 4px; font-size: 11px; color: #e0e0e0; display: block; cursor: pointer; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.node-body .file-btn:hover { background: #1a5276; }
-.node-delete { position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; border-radius: 50%; background: #e94560; color: white; border: none; cursor: pointer; font-size: 12px; line-height: 20px; text-align: center; z-index: 20; display: none; }
+.node-body .file-btn { padding: 5px 10px; border: 1px solid var(--vscode-border); border-radius: 3px; background: transparent; font-size: 11px; color: var(--vscode-text); display: block; cursor: pointer; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node-body .file-btn:hover { background: var(--vscode-hover); border-color: #4b4b4b; color: #ffffff; }
+.node-action-button { width: 100%; padding: 6px 10px; margin-bottom: 8px; border: 1px solid var(--vscode-border); border-radius: 3px; background: transparent; color: var(--vscode-text); cursor: pointer; font-size: 12px; font-weight: 600; }
+.node-action-button:hover { background: var(--vscode-hover); border-color: #4b4b4b; color: #ffffff; }
+.node-delete { position: absolute; top: -8px; right: -8px; width: 20px; height: 20px; border-radius: 50%; background: var(--vscode-tab); color: var(--vscode-danger); border: 1px solid var(--vscode-danger); cursor: pointer; font-size: 12px; line-height: 18px; text-align: center; z-index: 20; display: none; }
+.node-delete:hover { background: var(--vscode-hover); }
 .node:hover .node-delete { display: block; }
 .node-body .param-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .node-body .param-row label { margin-bottom: 0; white-space: nowrap; }
 .node-body .param-row input { margin-bottom: 0; flex: 1; }
 
-/* Node type colors */
-.node-input .node-header { background: linear-gradient(135deg, #1a5276, #2e86c1); }
-.node-lowpass .node-header { background: linear-gradient(135deg, #6c3483, #a569bd); }
-.node-highpass .node-header { background: linear-gradient(135deg, #7d3c98, #bb8fce); }
-.node-bandpass .node-header { background: linear-gradient(135deg, #5b2c6f, #8e44ad); }
-.node-weighted .node-header { background: linear-gradient(135deg, #4a235a, #7d3c98); }
-.node-firlinear .node-header { background: linear-gradient(135deg, #154360, #5dade2); }
-.node-custom .node-header { background: linear-gradient(135deg, #1e8449, #27ae60); }
+/* Node type accents */
+.node-input { --node-color: #3794ff; }
+.node-signalgen { --node-color: #4ec9b0; }
+.node-lowpass { --node-color: #b180d7; }
+.node-highpass { --node-color: #b180d7; }
+.node-bandpass { --node-color: #9cdcfe; }
+.node-weighted { --node-color: #c586c0; }
+.node-firlinear { --node-color: #4fc1ff; }
+.node-custom { --node-color: #6a9955; }
 .node-custom { display: flex; flex-direction: column; }
 .node-custom .node-body { display: flex; flex-direction: column; position: relative; flex: 1; overflow: hidden; }
 .node-custom .node-body label { flex-shrink: 0; }
 .node-custom .node-body textarea { flex: 1; min-height: 40px; resize: none; }
 .node-custom .resize-handle { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; z-index: 10; }
 .node-custom .resize-handle::after { content: ''; position: absolute; right: 3px; bottom: 3px; width: 8px; height: 8px; border-right: 2px solid #555; border-bottom: 2px solid #555; }
-.node-note .node-header { background: linear-gradient(135deg, #8a6f19, #c9a227); color: #1a1a2e; }
+.node-note { --node-color: var(--vscode-warning); }
 .node-note { display: flex; flex-direction: column; }
-.node-note .node-body { display: flex; flex-direction: column; position: relative; flex: 1; overflow: hidden; background: #2d2818; }
-.node-note .node-body label { flex-shrink: 0; color: #d9c980; }
-.node-note .node-body textarea { flex: 1; min-height: 70px; resize: none; background: #211d12; border-color: #5e4c16; color: #f4e8a4; }
+.node-note .node-body { display: flex; flex-direction: column; position: relative; flex: 1; overflow: hidden; background: var(--vscode-side); }
+.node-note .node-body label { flex-shrink: 0; color: var(--vscode-muted); }
+.node-note .node-body textarea { flex: 1; min-height: 70px; resize: none; background: var(--vscode-input-bg); border-color: var(--vscode-input); color: var(--vscode-text); }
 .node-note .resize-handle { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; z-index: 10; }
 .node-note .resize-handle::after { content: ''; position: absolute; right: 3px; bottom: 3px; width: 8px; height: 8px; border-right: 2px solid #8a6f19; border-bottom: 2px solid #8a6f19; }
-.node-splitter .node-header { background: linear-gradient(135deg, #b9770e, #f39c12); }
-.node-switch .node-header { background: linear-gradient(135deg, #7d6608, #f1c40f); color: #1a1a2e; }
-.node-multiplexer .node-header { background: linear-gradient(135deg, #0e5f6f, #17a2b8); }
-.node-multiplier .node-header { background: linear-gradient(135deg, #1a5276, #2980b9); }
-.node-adder .node-header { background: linear-gradient(135deg, #196f3d, #2ecc71); }
-.node-subtractor .node-header { background: linear-gradient(135deg, #922b21, #e74c3c); }
-.node-inverter .node-header { background: linear-gradient(135deg, #6c3483, #af7ac5); }
-.node-normalizer .node-header { background: linear-gradient(135deg, #1b4f72, #5dade2); }
-.node-cutbeg .node-header { background: linear-gradient(135deg, #a04000, #e67e22); }
-.node-cutend .node-header { background: linear-gradient(135deg, #935116, #d35400); }
-.node-cutrange .node-header { background: linear-gradient(135deg, #922b21, #c0392b); }
-.node-keeprange .node-header { background: linear-gradient(135deg, #1e8449, #27ae60); }
-.node-avgwin .node-header { background: linear-gradient(135deg, #0e6655, #1abc9c); }
-.node-avgpool .node-header { background: linear-gradient(135deg, #0e6251, #16a085); }
-.node-maxpool .node-header { background: linear-gradient(135deg, #1e8449, #27ae60); }
-.node-limiter .node-header { background: linear-gradient(135deg, #922b21, #c0392b); }
-.node-phaseshifter .node-header { background: linear-gradient(135deg, #6c3483, #8e44ad); }
-.node-logmultiplier .node-header { background: linear-gradient(135deg, #1a5276, #2980b9); }
-.node-entropy .node-header { background: linear-gradient(135deg, #7d6608, #f4d03f); color: #1a1a2e; }
-.node-squarewave .node-header { background: linear-gradient(135deg, #9a5b00, #f39c12); color: #1a1a2e; }
-.node-abs .node-header { background: linear-gradient(135deg, #0e6655, #16a085); }
-.node-hysteresis .node-header { background: linear-gradient(135deg, #922b21, #e74c3c); }
-.node-kalman .node-header { background: linear-gradient(135deg, #1a5276, #2980b9); }
-.node-medianwin .node-header { background: linear-gradient(135deg, #6c3483, #8e44ad); }
-.node-maxwin .node-header { background: linear-gradient(135deg, #922b21, #c0392b); }
-.node-minwin .node-header { background: linear-gradient(135deg, #1a5276, #2980b9); }
-.node-extremewin .node-header { background: linear-gradient(135deg, #a04000, #e67e22); }
-.node-probe .node-header { background: linear-gradient(135deg, #c0392b, #e74c3c); }
-.node-csvoutput .node-header { background: linear-gradient(135deg, #0e6251, #148f77); }
+.node-splitter { --node-color: #d7ba7d; }
+.node-switch { --node-color: var(--vscode-warning); }
+.node-multiplexer { --node-color: #4ec9b0; }
+.node-multiplier { --node-color: #3794ff; }
+.node-adder { --node-color: var(--vscode-success); }
+.node-subtractor { --node-color: var(--vscode-danger); }
+.node-inverter { --node-color: #c586c0; }
+.node-normalizer { --node-color: #4fc1ff; }
+.node-cutbeg { --node-color: #d7ba7d; }
+.node-cutend { --node-color: #d7ba7d; }
+.node-cutrange { --node-color: var(--vscode-danger); }
+.node-keeprange { --node-color: var(--vscode-success); }
+.node-avgwin { --node-color: #4ec9b0; }
+.node-avgpool { --node-color: #4ec9b0; }
+.node-maxpool { --node-color: var(--vscode-success); }
+.node-limiter { --node-color: var(--vscode-danger); }
+.node-phaseshifter { --node-color: #c586c0; }
+.node-logmultiplier { --node-color: #3794ff; }
+.node-entropy { --node-color: var(--vscode-warning); }
+.node-squarewave { --node-color: #d7ba7d; }
+.node-abs { --node-color: #4ec9b0; }
+.node-hysteresis { --node-color: var(--vscode-danger); }
+.node-kalman { --node-color: #3794ff; }
+.node-medianwin { --node-color: #c586c0; }
+.node-maxwin { --node-color: var(--vscode-danger); }
+.node-minwin { --node-color: #3794ff; }
+.node-extremewin { --node-color: #d7ba7d; }
+.node-probe { --node-color: var(--vscode-danger); }
+.node-csvoutput { --node-color: #4ec9b0; }
 
 /* ========== Ports ========== */
-.port { position: absolute; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #53a8b6; background: #1a1a2e; cursor: crosshair; z-index: 15; transition: all 0.15s; }
-.port:hover { transform: scale(1.5); background: #53a8b6; box-shadow: 0 0 8px #53a8b6; }
+.port { position: absolute; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--vscode-accent-soft); background: var(--vscode-bg); cursor: crosshair; z-index: 15; transition: all 0.15s; }
+.port:hover { transform: scale(1.5); background: var(--vscode-accent-soft); box-shadow: 0 0 8px rgba(55,148,255,0.45); }
 .port-in { left: -7px; }
 .port-out { right: -7px; }
-.port-label { position: absolute; font-size: 10px; color: #999; white-space: nowrap; top: -1px; pointer-events: none; }
+.port-label { position: absolute; font-size: 10px; color: var(--vscode-muted); white-space: nowrap; top: -1px; pointer-events: none; }
 .port-in .port-label { right: 18px; text-align: right; }
 .port-out .port-label { left: 18px; }
 
 /* ========== Chart Panel ========== */
-.chart-header { padding: 10px 12px; font-size: 14px; font-weight: 600; background: #0f3460; border-bottom: 1px solid #1a1a2e; display: flex; align-items: center; justify-content: space-between; }
-.chart-header .run-btn { padding: 5px 16px; background: #27ae60; border: none; border-radius: 5px; color: white; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s; }
-.chart-header .run-btn:hover { background: #2ecc71; }
+.chart-header { padding: 10px 12px; font-size: 14px; font-weight: 600; background: var(--vscode-side); border-bottom: 1px solid var(--vscode-border); display: flex; align-items: center; justify-content: space-between; }
+.chart-header .run-btn { padding: 5px 16px; background: var(--vscode-tab); border: 1px solid var(--vscode-border); border-radius: 3px; color: var(--vscode-text); cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s; }
+.chart-header .run-btn:hover { background: var(--vscode-hover); border-color: #4b4b4b; color: #ffffff; }
 .chart-header .run-btn:active { transform: scale(0.96); }
-.auto-run-wrap { display: flex; align-items: center; gap: 5px; background: #0a1929; border-radius: 5px; padding: 3px 8px 3px 3px; }
+.auto-run-wrap { display: flex; align-items: center; gap: 5px; background: var(--vscode-panel); border: 1px solid var(--vscode-border); border-radius: 3px; padding: 3px 8px 3px 3px; }
 .auto-btn { padding: 4px 10px !important; font-size: 13px !important; }
-.auto-btn.active { background: #e67e22 !important; animation: pulse 1s infinite; }
+.auto-btn.active { background: var(--vscode-hover) !important; border-color: var(--vscode-warning) !important; color: var(--vscode-warning) !important; animation: pulse 1s infinite; }
 @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.7; } }
-.auto-interval { width: 42px; padding: 3px 4px; border: 1px solid #333; border-radius: 3px; background: #16213e; color: #e0e0e0; font-size: 11px; text-align: center; }
-.auto-interval:focus { outline: none; border-color: #53a8b6; }
-.export-toggle { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #aaa; background: #0a1929; border-radius: 5px; padding: 5px 8px; white-space: nowrap; }
+.auto-interval { width: 42px; padding: 3px 4px; border: 1px solid var(--vscode-input); border-radius: 3px; background: var(--vscode-input-bg); color: var(--vscode-text); font-size: 11px; text-align: center; }
+.auto-interval:focus { outline: none; border-color: var(--vscode-accent); }
+.export-toggle { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--vscode-muted); background: var(--vscode-panel); border: 1px solid var(--vscode-border); border-radius: 3px; padding: 5px 8px; white-space: nowrap; }
 .export-toggle input { margin: 0; }
-.auto-bar-track { width: 50px; height: 4px; background: #1b2838; border-radius: 2px; overflow: hidden; }
-.auto-bar-fill { width: 0%; height: 100%; background: #e67e22; border-radius: 2px; transition: width 0.1s linear; }
-.chart-scroll { flex: 1; overflow-y: auto; padding: 8px; }
+.auto-bar-track { width: 50px; height: 4px; background: var(--vscode-border); border-radius: 2px; overflow: hidden; }
+.auto-bar-fill { width: 0%; height: 100%; background: var(--vscode-warning); border-radius: 2px; transition: width 0.1s linear; }
+.chart-scroll-wrap { flex: 1; display: flex; min-height: 0; }
+.chart-scroll { flex: 1; min-width: 0; height: 100%; overflow-y: auto; padding: 8px; scrollbar-width: none; }
 .chart-item { margin-bottom: 12px; }
-.chart-item-title { font-size: 11px; color: #aaa; margin-bottom: 4px; padding-left: 4px; display: flex; align-items: center; gap: 6px; }
+.chart-item-title { font-size: 11px; color: var(--vscode-muted); margin-bottom: 4px; padding-left: 4px; display: flex; align-items: center; gap: 6px; }
 .chart-item-title .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.chart-item canvas { width: 100%; height: 120px; background: #0d1b2a; border-radius: 6px; border: 1px solid #1b2838; display: block; cursor: crosshair; }
+.chart-item canvas { width: 100%; height: 120px; background: var(--vscode-bg); border-radius: 4px; border: 1px solid var(--vscode-border); display: block; cursor: crosshair; }
 .chart-item.dragging { opacity: 0.4; }
 .chart-item-title { cursor: grab; }
 
 /* ========== Scrollbar ========== */
+.chart-scroll::-webkit-scrollbar { width: 0; height: 0; }
+.chart-scrollbar { position: relative; flex: 0 0 16px; width: 16px; min-width: 16px; max-width: 16px; background: var(--vscode-tab); box-shadow: inset 1px 0 var(--vscode-border); z-index: 20; cursor: pointer; }
+.chart-scrollbar-thumb { position: absolute; left: 0; right: 0; min-height: 36px; background: #5a5a5a; border-radius: 3px; cursor: grab; }
+.chart-scrollbar-thumb:hover, .chart-scrollbar-thumb.dragging { background: var(--vscode-accent); }
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #1a1a2e; }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+::-webkit-scrollbar-track { background: var(--vscode-bg); }
+::-webkit-scrollbar-thumb { background: #5a5a5a; border-radius: 3px; }
 
 /* ========== Empty state ========== */
-.empty-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: #444; font-size: 14px; pointer-events: none; line-height: 2; }
+.empty-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: var(--vscode-muted); font-size: 14px; pointer-events: none; line-height: 2; opacity: 0.65; }
 
 /* ========== Toast ========== */
 .toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 20px; border-radius: 6px; font-size: 13px; z-index: 9999; animation: fadeIn 0.3s; }
-.toast-info { background: #2e86c1; color: white; }
-.toast-error { background: #e74c3c; color: white; }
-.toast-success { background: #27ae60; color: white; }
+.toast-info { background: var(--vscode-accent); color: white; }
+.toast-error { background: var(--vscode-danger); color: white; }
+.toast-success { background: var(--vscode-success); color: white; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 
 /* ========== Sidebar ========== */
-.sidebar { width: 180px; background: #0f1a2e; border-right: 1px solid #1b2838; display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
-.sidebar-title { padding: 12px 14px 8px; font-size: 14px; font-weight: 700; color: #e0e0e0; border-bottom: 1px solid #1b2838; }
+.sidebar { width: 180px; background: var(--vscode-side); border-right: 1px solid var(--vscode-border); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+.sidebar-title { padding: 12px 14px 8px; font-size: 14px; font-weight: 700; color: var(--vscode-text); border-bottom: 1px solid var(--vscode-border); }
 .sidebar-group { padding: 6px 0; }
-.sidebar-group-title { padding: 4px 14px; font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
-.sidebar-item { display: flex; align-items: center; gap: 8px; padding: 7px 14px; cursor: pointer; font-size: 12px; color: #ccc; transition: all 0.15s; }
-.sidebar-item:hover { background: #16213e; color: #fff; }
-.sidebar-item .dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
-.sidebar-divider { height: 1px; background: #1b2838; margin: 4px 10px; }
-.sidebar-actions { margin-top: auto; padding: 8px; border-top: 1px solid #1b2838; display: flex; flex-direction: column; gap: 4px; }
-.sidebar-actions button { padding: 6px 10px; border: 1px solid #1b2838; border-radius: 5px; background: #16213e; color: #ccc; cursor: pointer; font-size: 11px; transition: all 0.15s; text-align: left; }
-.sidebar-actions button:hover { background: #1a2744; color: #fff; border-color: #2a3f5f; }
+.sidebar-group-title { padding: 4px 14px; font-size: 10px; color: var(--vscode-muted); text-transform: uppercase; letter-spacing: 1px; }
+.sidebar-item { display: flex; align-items: center; gap: 8px; padding: 7px 14px; cursor: pointer; font-size: 12px; color: var(--vscode-text); transition: all 0.15s; }
+.sidebar-item:hover { background: var(--vscode-hover); color: #fff; }
+.sidebar-item .dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; filter: saturate(0.55) brightness(0.95); }
+.sidebar-divider { height: 1px; background: var(--vscode-border); margin: 4px 10px; }
+.sidebar-actions { margin-top: auto; padding: 8px; border-top: 1px solid var(--vscode-border); display: flex; flex-direction: column; gap: 4px; }
+.sidebar-actions button { padding: 6px 10px; border: 1px solid var(--vscode-border); border-radius: 3px; background: var(--vscode-tab); color: var(--vscode-text); cursor: pointer; font-size: 11px; transition: all 0.15s; text-align: left; }
+.sidebar-actions button:hover { background: var(--vscode-hover); color: #fff; border-color: #4b4b4b; }
 </style>
 </head>
 <body>
@@ -172,6 +209,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
     <div class="sidebar-group">
       <div class="sidebar-group-title">输入和输出</div>
       <div class="sidebar-item" onclick="app.addNode('input')"><span class="dot" style="background:#2e86c1"></span>CSV 输入</div>
+      <div class="sidebar-item" onclick="app.addNode('signalgen')"><span class="dot" style="background:#1abc9c"></span>信号发生器</div>
       <div class="sidebar-item" onclick="app.addNode('csvoutput')"><span class="dot" style="background:#148f77"></span>CSV 输出</div>
     </div>
     <div class="sidebar-group">
@@ -260,8 +298,11 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
         <button class="run-btn" onclick="app.run()">▶ 运行 (F5)</button>
       </div>
     </div>
-    <div class="chart-scroll" id="chartScroll">
-      <div style="text-align:center;color:#444;padding:40px 0;font-size:13px;" id="chartEmpty">运行后在此显示波形</div>
+    <div class="chart-scroll-wrap">
+      <div class="chart-scroll" id="chartScroll">
+        <div style="text-align:center;color:#444;padding:40px 0;font-size:13px;" id="chartEmpty">运行后在此显示波形</div>
+      </div>
+      <div class="chart-scrollbar" id="chartScrollbar"><div class="chart-scrollbar-thumb" id="chartScrollbarThumb"></div></div>
     </div>
   </div>
 </div>
@@ -307,6 +348,17 @@ const DSP = {
     const out = [signal[0]];
     for (let i = 1; i < signal.length; i++) {
       out.push(out[i - 1] * w + signal[i] * (1 - w));
+    }
+    return out;
+  },
+
+  generateSineWave(length, frequency, high, low, sampleRate) {
+    const count = Math.max(0, Math.floor(length || 0));
+    const center = (high + low) / 2;
+    const amplitude = (high - low) / 2;
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      out.push(center + amplitude * Math.sin(2 * Math.PI * frequency * i / sampleRate));
     }
     return out;
   },
@@ -455,6 +507,17 @@ const NODE_DEFS = {
       { id: 'file', label: '波形数据', type: 'file' }
     ]
   },
+  signalgen: {
+    type: 'signalgen', title: '信号发生器',
+    inputs: [{ id: 'len', label: '长度参考' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'frequency', label: '频率 (Hz)', type: 'number', default: 10 },
+      { id: 'high', label: '高电平', type: 'number', default: 1 },
+      { id: 'low', label: '低电平', type: 'number', default: -1 },
+      { id: 'length', label: '输出长度', type: 'number', default: 1000 }
+    ]
+  },
   lowpass: {
     type: 'lowpass', title: '低通滤波器',
     inputs: [{ id: 'in', label: '输入' }],
@@ -517,7 +580,9 @@ const NODE_DEFS = {
     type: 'splitter', title: '分流器',
     inputs: [{ id: 'in', label: '输入' }],
     outputs: [{ id: 'out1', label: '输出1' }, { id: 'out2', label: '输出2' }],
-    params: []
+    params: [
+      { id: 'count', label: '输出数量', type: 'number', default: 2, affectsPorts: true }
+    ]
   },
   switch: {
     type: 'switch', title: '开关',
@@ -784,6 +849,8 @@ class App {
     this.svg = document.getElementById('connectionsSvg');
     this.viewport = document.getElementById('viewport');
     this.chartScroll = document.getElementById('chartScroll');
+    this.chartScrollbar = document.getElementById('chartScrollbar');
+    this.chartScrollbarThumb = document.getElementById('chartScrollbarThumb');
 
     this.draggingNode = null;
     this.dragOffset = { x: 0, y: 0 };
@@ -806,12 +873,13 @@ class App {
     this.canvasPanel.appendChild(this.selectionBox);
 
     this.initDivider();
+    this.initChartScrollbar();
     this.initEvents();
     this.initSidebarDrag();
     this.resize();
     this.drawGrid();
 
-    window.addEventListener('resize', () => { this.resize(); this.drawGrid(); });
+    window.addEventListener('resize', () => { this.resize(); this.drawGrid(); this.updateChartScrollbar(); });
   }
 
   // ---- Undo/Redo ----
@@ -1012,7 +1080,7 @@ class App {
     // Mouse wheel zoom on canvas - zoom entire viewport
     this.canvasPanel.addEventListener('wheel', (e) => {
       if (e.target.closest('.sidebar') || e.target.closest('.chart-panel')) return;
-      if (e.target.closest('.node-body textarea, .node-body input, .node-body select')) return;
+      if (e.target.closest('.node-body textarea, .node-body input, .node-body select, .param-select')) return;
       e.preventDefault();
       const rect = this.canvasPanel.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
@@ -1054,6 +1122,10 @@ class App {
       if (this.marquee) {
         this.updateMarqueeSelection(e);
       }
+    });
+
+    document.addEventListener('mousedown', (e) => {
+      if (!e.target.closest('.param-select')) this.closeParamSelects();
     });
 
     document.addEventListener('mouseup', (e) => {
@@ -1229,6 +1301,10 @@ class App {
     return Math.max(1, Math.min(12, Math.floor(node.params.count || 1)));
   }
 
+  getSplitterOutputCount(node) {
+    return Math.max(1, Math.min(12, Math.floor(node.params.count || 2)));
+  }
+
   getMultiplexerMode(node) {
     return node.params.mode === '一入多出' ? '一入多出' : '多入一出';
   }
@@ -1252,6 +1328,10 @@ class App {
   }
 
   getNodeOutputs(node) {
+    if (node.type === 'splitter') {
+      const count = this.getSplitterOutputCount(node);
+      return Array.from({ length: count }, (_, i) => ({ id: `out${i + 1}`, label: `输出${i + 1}` }));
+    }
     if (node.type === 'switch') {
       const count = this.getSwitchPortCount(node);
       if (count === 1) return [{ id: 'out', label: '输出' }];
@@ -1323,8 +1403,8 @@ class App {
     if (node.type === 'csvoutput') {
       const exportBtn = document.createElement('button');
       exportBtn.type = 'button';
+      exportBtn.className = 'node-action-button';
       exportBtn.textContent = '导出 CSV';
-      exportBtn.style.cssText = 'width:100%;padding:6px 10px;margin-bottom:8px;border:none;border-radius:4px;background:#148f77;color:white;cursor:pointer;font-size:12px;font-weight:600;';
       exportBtn.onclick = (e) => {
         e.stopPropagation();
         this.exportCsvOutputNode(node.id);
@@ -1426,23 +1506,7 @@ class App {
       } else if (p.type === 'routeChecks') {
         this.renderRouteChecks(body, node, p);
       } else if (p.type === 'select') {
-        const sel = document.createElement('select');
-        sel.style.cssText = 'width:100%;padding:4px 8px;border:1px solid #333;border-radius:4px;background:#16213e;color:#e0e0e0;font-size:12px;margin-bottom:6px;';
-        this.markParamControl(sel, p);
-        for (const opt of (p.options || [])) {
-          const option = document.createElement('option');
-          option.value = opt;
-          option.textContent = opt;
-          if (opt === node.params[p.id]) option.selected = true;
-          sel.appendChild(option);
-        }
-        sel.onchange = () => {
-          node.params[p.id] = sel.value;
-          if (p.affectsPorts) this.rerenderNode(node);
-          this.syncParamControlStates(node, body);
-          this.scheduleSave();
-        };
-        body.appendChild(sel);
+        this.renderParamSelect(body, node, p);
       } else if (p.type === 'info') {
         const div = document.createElement('div');
         div.style.cssText = 'font-size:10px;color:#888;font-family:Consolas,monospace;padding:2px 0;white-space:nowrap;';
@@ -1565,6 +1629,57 @@ class App {
     }
   }
 
+  closeParamSelects(scope = document) {
+    scope.querySelectorAll('.param-select.open').forEach(select => select.classList.remove('open'));
+  }
+
+  renderParamSelect(body, node, p) {
+    const wrap = document.createElement('div');
+    wrap.className = 'param-select';
+    this.markParamControl(wrap, p);
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'param-select-button';
+    button.textContent = node.params[p.id];
+    this.markParamControl(button, p);
+
+    const menu = document.createElement('div');
+    menu.className = 'param-select-menu';
+
+    for (const opt of (p.options || [])) {
+      const item = document.createElement('div');
+      item.className = 'param-select-option' + (opt === node.params[p.id] ? ' selected' : '');
+      item.textContent = opt;
+      item.onclick = (e) => {
+        e.stopPropagation();
+        node.params[p.id] = opt;
+        this.closeParamSelects();
+        if (p.affectsPorts) {
+          this.rerenderNode(node);
+        } else {
+          button.textContent = opt;
+          menu.querySelectorAll('.param-select-option').forEach(option => option.classList.toggle('selected', option === item));
+          this.syncParamControlStates(node, body);
+        }
+        this.scheduleSave();
+      };
+      menu.appendChild(item);
+    }
+
+    button.onclick = (e) => {
+      e.stopPropagation();
+      if (button.disabled) return;
+      const wasOpen = wrap.classList.contains('open');
+      this.closeParamSelects();
+      wrap.classList.toggle('open', !wasOpen);
+    };
+
+    wrap.appendChild(button);
+    wrap.appendChild(menu);
+    body.appendChild(wrap);
+  }
+
   renderRouteChecks(body, node, p) {
     if (!node.params[p.id] || typeof node.params[p.id] !== 'object') node.params[p.id] = {};
     const count = this.getMultiplexerPortCount(node);
@@ -1602,8 +1717,12 @@ class App {
     const makeButton = (text, onClick) => {
       const btn = document.createElement('button');
       btn.type = 'button';
+      btn.className = 'node-action-button';
       btn.textContent = text;
-      btn.style.cssText = 'flex:1;padding:4px 6px;border:none;border-radius:4px;background:#0f3460;color:#e0e0e0;cursor:pointer;font-size:11px;';
+      btn.style.flex = '1';
+      btn.style.padding = '4px 6px';
+      btn.style.marginBottom = '0';
+      btn.style.fontSize = '11px';
       btn.onclick = (e) => {
         e.stopPropagation();
         onClick();
@@ -2282,6 +2401,16 @@ class App {
         outputs['out'] = node._data ? [...node._data] : [];
         break;
 
+      case 'signalgen': {
+        const ref = this.getUpstreamData(node, 'len');
+        const length = ref.length || Math.max(0, Math.floor(node.params.length || 0));
+        const frequency = node.params.frequency !== undefined ? node.params.frequency : 10;
+        const high = node.params.high !== undefined ? node.params.high : 1;
+        const low = node.params.low !== undefined ? node.params.low : -1;
+        outputs['out'] = DSP.generateSineWave(length, frequency, high, low, this.sampleRate);
+        break;
+      }
+
       case 'lowpass': {
         const inp = this.getUpstreamData(node, 'in');
         outputs['out'] = inp.length ? DSP.lowpass(inp, node.params.cutoff || 50, this.sampleRate) : [];
@@ -2326,8 +2455,8 @@ class App {
       }
       case 'splitter': {
         const inp = this.getUpstreamData(node, 'in');
-        outputs['out1'] = [...inp];
-        outputs['out2'] = [...inp];
+        const count = this.getSplitterOutputCount(node);
+        for (let i = 1; i <= count; i++) outputs[`out${i}`] = [...inp];
         break;
       }
       case 'switch': {
@@ -2776,6 +2905,7 @@ class App {
 
     if (container.children.length === 0) {
       container.innerHTML = '<div style="text-align:center;color:#444;padding:40px 0;font-size:13px;">没有数据可显示</div>';
+      requestAnimationFrame(() => this.updateChartScrollbar());
       return;
     }
 
@@ -2786,6 +2916,7 @@ class App {
 
     // Chart events
     this.initChartEvents();
+    requestAnimationFrame(() => this.updateChartScrollbar());
     this.redrawCharts();
   }
 
@@ -2878,6 +3009,72 @@ class App {
     this.scheduleSave();
   }
 
+  initChartScrollbar() {
+    if (!this.chartScrollbar || !this.chartScrollbarThumb) return;
+    this.chartScrollbar.style.width = '16px';
+    this.chartScrollbar.style.flexBasis = '16px';
+    this.chartScrollbar.style.minWidth = '16px';
+    this.chartScrollbar.style.maxWidth = '16px';
+    this._chartScrollbarDragging = false;
+    this._chartScrollbarWheel = (e) => {
+      e.preventDefault();
+      this.chartScroll.scrollTop += e.deltaY;
+    };
+    this._chartScrollbarMouseMove = (e) => {
+      if (!this._chartScrollbarDragging) return;
+      const scrollable = this.chartScroll.scrollHeight - this.chartScroll.clientHeight;
+      const maxThumbTop = Math.max(1, this.chartScrollbar.clientHeight - this.chartScrollbarThumb.offsetHeight);
+      const dy = e.clientY - this._chartScrollbarDragStartY;
+      this.chartScroll.scrollTop = this._chartScrollbarDragStartTop + dy * scrollable / maxThumbTop;
+    };
+    this._chartScrollbarMouseUp = () => {
+      this._chartScrollbarDragging = false;
+      this.chartScrollbarThumb.classList.remove('dragging');
+      document.removeEventListener('mousemove', this._chartScrollbarMouseMove);
+      document.removeEventListener('mouseup', this._chartScrollbarMouseUp);
+    };
+    this.chartScrollbar.addEventListener('wheel', this._chartScrollbarWheel, { passive: false });
+    this.chartScrollbar.addEventListener('mousedown', (e) => {
+      if (e.target === this.chartScrollbarThumb) return;
+      e.preventDefault();
+      const rect = this.chartScrollbar.getBoundingClientRect();
+      const ratio = (e.clientY - rect.top) / rect.height;
+      this.chartScroll.scrollTop = ratio * (this.chartScroll.scrollHeight - this.chartScroll.clientHeight);
+    });
+    this.chartScrollbarThumb.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      this._chartScrollbarDragging = true;
+      this._chartScrollbarDragStartY = e.clientY;
+      this._chartScrollbarDragStartTop = this.chartScroll.scrollTop;
+      this.chartScrollbarThumb.classList.add('dragging');
+      document.addEventListener('mousemove', this._chartScrollbarMouseMove);
+      document.addEventListener('mouseup', this._chartScrollbarMouseUp);
+    });
+    this.chartScroll.addEventListener('scroll', () => this.updateChartScrollbar());
+    this.updateChartScrollbar();
+  }
+
+  updateChartScrollbar() {
+    if (!this.chartScrollbar || !this.chartScrollbarThumb) return;
+    const scrollable = this.chartScroll.scrollHeight > this.chartScroll.clientHeight;
+    this.chartScrollbar.style.display = 'block';
+    this.chartScrollbarThumb.style.display = scrollable ? 'block' : 'none';
+    if (!scrollable) return;
+    const trackHeight = this.chartScrollbar.clientHeight;
+    const thumbHeight = Math.max(36, Math.floor(trackHeight * this.chartScroll.clientHeight / this.chartScroll.scrollHeight));
+    const maxThumbTop = Math.max(0, trackHeight - thumbHeight);
+    const maxScrollTop = Math.max(1, this.chartScroll.scrollHeight - this.chartScroll.clientHeight);
+    const thumbTop = this.chartScroll.scrollTop / maxScrollTop * maxThumbTop;
+    this.chartScrollbarThumb.style.height = thumbHeight + 'px';
+    this.chartScrollbarThumb.style.transform = `translateY(${thumbTop}px)`;
+  }
+
+  isPointerOnChartScrollbar(e, scroll) {
+    const rect = scroll.getBoundingClientRect();
+    const scrollbarWidth = Math.max(44, scroll.offsetWidth - scroll.clientWidth);
+    return scroll.scrollHeight > scroll.clientHeight && e.clientX >= rect.right - scrollbarWidth;
+  }
+
   initChartEvents() {
     const scroll = this.chartScroll;
     // Remove old listeners
@@ -2892,6 +3089,7 @@ class App {
 
     // Zoom with wheel
     this._chartWheel = (e) => {
+      if (this.isPointerOnChartScrollbar(e, scroll)) return;
       e.preventDefault();
       const rect = scroll.getBoundingClientRect();
       const mouseXRatio = (e.clientX - rect.left) / rect.width;
@@ -3110,7 +3308,7 @@ class App {
       autoExportCsv: document.getElementById('autoExportCsv')?.checked === true,
       chartZoom: this.chartZoom || 1,
       chartOffset: this.chartOffset || 0,
-      chartOrder: this.chartDataList ? this.chartDataList.map(d => d.title) : [],
+      chartOrder: this.chartDataList ? this.chartDataList.map(d => d.nodeId !== null ? d.nodeId : d.title) : [],
       panelFlex: {
         left: this.canvasPanel.style.flex || '',
         right: document.getElementById('chartPanel').style.flex || ''
