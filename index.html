@@ -92,6 +92,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .node-bandpass { --node-color: #9cdcfe; }
 .node-weighted { --node-color: #c586c0; }
 .node-firlinear { --node-color: #4fc1ff; }
+.node-fft { --node-color: #dcdcaa; }
 .node-custom { --node-color: #6a9955; }
 .node-custom { display: flex; flex-direction: column; }
 .node-custom .node-body { display: flex; flex-direction: column; position: relative; flex: 1; overflow: hidden; }
@@ -165,6 +166,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .chart-item { margin-bottom: 12px; }
 .chart-item-title { font-size: 11px; color: var(--vscode-muted); margin-bottom: 4px; padding-left: 4px; display: flex; align-items: center; gap: 6px; }
 .chart-item-title .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.chart-item-readout { font-size: 10px; color: var(--vscode-muted); margin: -2px 0 4px; padding-left: 4px; min-height: 13px; }
 .chart-item canvas { width: 100%; height: 120px; background: var(--vscode-bg); border-radius: 4px; border: 1px solid var(--vscode-border); display: block; cursor: crosshair; }
 .chart-item.dragging { opacity: 0.4; }
 .chart-item-title { cursor: grab; }
@@ -211,6 +213,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
       <div class="sidebar-item" onclick="app.addNode('input')"><span class="dot" style="background:#2e86c1"></span>CSV 输入</div>
       <div class="sidebar-item" onclick="app.addNode('signalgen')"><span class="dot" style="background:#1abc9c"></span>信号发生器</div>
       <div class="sidebar-item" onclick="app.addNode('csvoutput')"><span class="dot" style="background:#148f77"></span>CSV 输出</div>
+      <div class="sidebar-item" onclick="app.addNode('probe')"><span class="dot" style="background:#e74c3c"></span>示波器</div>
     </div>
     <div class="sidebar-group">
       <div class="sidebar-group-title">滤波器</div>
@@ -219,54 +222,57 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
       <div class="sidebar-item" onclick="app.addNode('bandpass')"><span class="dot" style="background:#8e44ad"></span>带通滤波</div>
       <div class="sidebar-item" onclick="app.addNode('weighted')"><span class="dot" style="background:#7d3c98"></span>一阶 IIR 平滑</div>
       <div class="sidebar-item" onclick="app.addNode('firlinear')"><span class="dot" style="background:#5dade2"></span>FIR 线性相位</div>
+      <div class="sidebar-item" onclick="app.addNode('kalman')"><span class="dot" style="background:#2980b9"></span>卡尔曼滤波</div>
     </div>
     <div class="sidebar-group">
-      <div class="sidebar-group-title">运算器</div>
+      <div class="sidebar-group-title">频域分析</div>
+      <div class="sidebar-item" onclick="app.addNode('fft')"><span class="dot" style="background:#dcdcaa"></span>FFT 频谱</div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">运算与变换</div>
       <div class="sidebar-item" onclick="app.addNode('multiplier')"><span class="dot" style="background:#2980b9"></span>乘法器</div>
       <div class="sidebar-item" onclick="app.addNode('adder')"><span class="dot" style="background:#2ecc71"></span>加法器</div>
       <div class="sidebar-item" onclick="app.addNode('subtractor')"><span class="dot" style="background:#e74c3c"></span>减法器</div>
       <div class="sidebar-item" onclick="app.addNode('inverter')"><span class="dot" style="background:#af7ac5"></span>反相器</div>
       <div class="sidebar-item" onclick="app.addNode('abs')"><span class="dot" style="background:#16a085"></span>绝对值</div>
       <div class="sidebar-item" onclick="app.addNode('logmultiplier')"><span class="dot" style="background:#2980b9"></span>对数乘法器</div>
-    </div>
-    <div class="sidebar-group">
-      <div class="sidebar-group-title">信号处理</div>
       <div class="sidebar-item" onclick="app.addNode('normalizer')"><span class="dot" style="background:#5dade2"></span>归一化</div>
       <div class="sidebar-item" onclick="app.addNode('limiter')"><span class="dot" style="background:#c0392b"></span>限位器</div>
       <div class="sidebar-item" onclick="app.addNode('phaseshifter')"><span class="dot" style="background:#8e44ad"></span>移相器</div>
       <div class="sidebar-item" onclick="app.addNode('hysteresis')"><span class="dot" style="background:#e74c3c"></span>迟滞比较器</div>
-      <div class="sidebar-item" onclick="app.addNode('kalman')"><span class="dot" style="background:#2980b9"></span>卡尔曼滤波</div>
     </div>
     <div class="sidebar-group">
       <div class="sidebar-group-title">窗口统计</div>
       <div class="sidebar-item" onclick="app.addNode('avgwin')"><span class="dot" style="background:#1abc9c"></span>Avg Win</div>
+      <div class="sidebar-item" onclick="app.addNode('medianwin')"><span class="dot" style="background:#8e44ad"></span>中值窗口</div>
       <div class="sidebar-item" onclick="app.addNode('maxwin')"><span class="dot" style="background:#c0392b"></span>Max Win</div>
       <div class="sidebar-item" onclick="app.addNode('minwin')"><span class="dot" style="background:#2980b9"></span>Min Win</div>
-      <div class="sidebar-item" onclick="app.addNode('medianwin')"><span class="dot" style="background:#8e44ad"></span>中值窗口</div>
       <div class="sidebar-item" onclick="app.addNode('extremewin')"><span class="dot" style="background:#e67e22"></span>极值窗口</div>
       <div class="sidebar-item" onclick="app.addNode('entropy')"><span class="dot" style="background:#f4d03f"></span>因果窗口熵</div>
       <div class="sidebar-item" onclick="app.addNode('squarewave')"><span class="dot" style="background:#f39c12"></span>矩形波检测器</div>
     </div>
     <div class="sidebar-group">
-      <div class="sidebar-group-title">池化降采样</div>
+      <div class="sidebar-group-title">降采样</div>
       <div class="sidebar-item" onclick="app.addNode('avgpool')"><span class="dot" style="background:#16a085"></span>Avg Pool</div>
       <div class="sidebar-item" onclick="app.addNode('maxpool')"><span class="dot" style="background:#27ae60"></span>Max Pool</div>
     </div>
     <div class="sidebar-group">
-      <div class="sidebar-group-title">裁剪</div>
+      <div class="sidebar-group-title">裁剪截取</div>
       <div class="sidebar-item" onclick="app.addNode('cutbeg')"><span class="dot" style="background:#e67e22"></span>Cut Beg</div>
       <div class="sidebar-item" onclick="app.addNode('cutend')"><span class="dot" style="background:#d35400"></span>Cut End</div>
       <div class="sidebar-item" onclick="app.addNode('cutrange')"><span class="dot" style="background:#c0392b"></span>Cut Range</div>
       <div class="sidebar-item" onclick="app.addNode('keeprange')"><span class="dot" style="background:#27ae60"></span>Keep Range</div>
     </div>
     <div class="sidebar-group">
-      <div class="sidebar-group-title">工具</div>
+      <div class="sidebar-group-title">流程控制</div>
       <div class="sidebar-item" onclick="app.addNode('splitter')"><span class="dot" style="background:#f39c12"></span>分流器</div>
       <div class="sidebar-item" onclick="app.addNode('switch')"><span class="dot" style="background:#f1c40f"></span>开关</div>
       <div class="sidebar-item" onclick="app.addNode('multiplexer')"><span class="dot" style="background:#17a2b8"></span>多路选择器</div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">辅助</div>
       <div class="sidebar-item" onclick="app.addNode('custom')"><span class="dot" style="background:#27ae60"></span>自定义节点</div>
       <div class="sidebar-item" onclick="app.addNode('note')"><span class="dot" style="background:#c9a227"></span>便签</div>
-      <div class="sidebar-item" onclick="app.addNode('probe')"><span class="dot" style="background:#e74c3c"></span>示波器</div>
     </div>
     <div class="sidebar-actions">
       <button onclick="app.loadDemo()">📊 演示数据</button>
@@ -360,6 +366,77 @@ const DSP = {
     for (let i = 0; i < count; i++) {
       out.push(center + amplitude * Math.sin(2 * Math.PI * frequency * i / sampleRate));
     }
+    return out;
+  },
+
+  nextPowerOfTwo(value) {
+    let n = 1;
+    const target = Math.max(2, Math.floor(value || 2));
+    while (n < target) n <<= 1;
+    return n;
+  },
+
+  fftInPlace(re, im) {
+    const n = re.length;
+    for (let i = 1, j = 0; i < n; i++) {
+      let bit = n >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if (i < j) {
+        [re[i], re[j]] = [re[j], re[i]];
+        [im[i], im[j]] = [im[j], im[i]];
+      }
+    }
+    for (let len = 2; len <= n; len <<= 1) {
+      const angle = -2 * Math.PI / len;
+      const wLenRe = Math.cos(angle);
+      const wLenIm = Math.sin(angle);
+      for (let i = 0; i < n; i += len) {
+        let wRe = 1, wIm = 0;
+        for (let j = 0; j < len / 2; j++) {
+          const uRe = re[i + j];
+          const uIm = im[i + j];
+          const vRe = re[i + j + len / 2] * wRe - im[i + j + len / 2] * wIm;
+          const vIm = re[i + j + len / 2] * wIm + im[i + j + len / 2] * wRe;
+          re[i + j] = uRe + vRe;
+          im[i + j] = uIm + vIm;
+          re[i + j + len / 2] = uRe - vRe;
+          im[i + j + len / 2] = uIm - vIm;
+          const nextRe = wRe * wLenRe - wIm * wLenIm;
+          wIm = wRe * wLenIm + wIm * wLenRe;
+          wRe = nextRe;
+        }
+      }
+    }
+  },
+
+  fftMagnitudeSpectrum(signal, sampleRate, size, minFreq, maxFreq) {
+    const n = DSP.nextPowerOfTwo(size || signal.length || 2);
+    const re = new Array(n).fill(0);
+    const im = new Array(n).fill(0);
+    for (let i = 0; i < Math.min(signal.length, n); i++) re[i] = Number(signal[i]) || 0;
+    DSP.fftInPlace(re, im);
+    const bins = Math.floor(n / 2) + 1;
+    const out = [];
+    const freqs = [];
+    const min = minFreq === '' || minFreq === undefined ? 0 : Number(minFreq);
+    const max = maxFreq === '' || maxFreq === undefined ? sampleRate / 2 : Number(maxFreq);
+    const lo = Math.max(0, Math.min(Number.isFinite(min) ? min : 0, sampleRate / 2));
+    const hi = Math.max(0, Math.min(Number.isFinite(max) ? max : sampleRate / 2, sampleRate / 2));
+    const rangeMin = Math.min(lo, hi);
+    const rangeMax = Math.max(lo, hi);
+    for (let k = 0; k < bins; k++) {
+      const edgeBin = k === 0 || k === n / 2;
+      const scale = edgeBin ? 1 / n : 2 / n;
+      const freq = k * sampleRate / n;
+      if (freq < rangeMin || freq > rangeMax) continue;
+      out.push(Math.hypot(re[k], im[k]) * scale);
+      freqs.push(freq);
+    }
+    out._chartType = 'spectrum';
+    out._xValues = freqs;
+    out._xUnit = 'Hz';
+    out._xLabel = '频率';
     return out;
   },
 
@@ -558,6 +635,16 @@ const NODE_DEFS = {
     params: [
       { id: 'cutoff', label: '截止频率 (Hz)', type: 'number', default: 50 },
       { id: 'taps', label: '抽头数量 (奇数)', type: 'number', default: 31 }
+    ]
+  },
+  fft: {
+    type: 'fft', title: 'FFT 频谱',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '幅值谱' }],
+    params: [
+      { id: 'size', label: 'FFT 点数', type: 'number', default: 1024 },
+      { id: 'minFreq', label: '最小频率 (Hz)', type: 'number', default: '', optional: true, min: 0 },
+      { id: 'maxFreq', label: '最大频率 (Hz)', type: 'number', default: '', optional: true, min: 0 }
     ]
   },
   custom: {
@@ -1471,9 +1558,10 @@ class App {
         const inp = document.createElement('input');
         inp.type = 'number';
         inp.value = node.params[p.id];
-        inp.min = 1;
+        inp.min = p.min !== undefined ? p.min : 1;
         this.markParamControl(inp, p);
         inp.oninput = () => {
+          if (p.optional && inp.value.trim() === '') { node.params[p.id] = ''; this.scheduleSave(); return; }
           node.params[p.id] = parseFloat(inp.value) || 0;
           if (p.affectsPorts) this.rerenderNode(node);
           this.scheduleSave();
@@ -2440,6 +2528,11 @@ class App {
         outputs['out'] = inp.length ? DSP.firFilter(inp, coeffs) : [];
         break;
       }
+      case 'fft': {
+        const inp = this.getUpstreamData(node, 'in');
+        outputs['out'] = inp.length ? DSP.fftMagnitudeSpectrum(inp, this.sampleRate, node.params.size || 1024, node.params.minFreq, node.params.maxFreq) : [];
+        break;
+      }
       case 'custom': {
         const inp = this.getUpstreamData(node, 'in');
         try {
@@ -2797,7 +2890,7 @@ class App {
         const inp = this.getUpstreamData(node, 'in');
         const name = node.params.name || `示波器 #${node.id}`;
         const color = node.params.color || this.randomColor();
-        this.probeData.set(node.id, { title: name, data: inp, color, nodeId: node.id });
+        this.probeData.set(node.id, { title: name, data: inp, color, nodeId: node.id, axis: this.getSignalAxis(inp) });
         break;
       }
     }
@@ -2884,7 +2977,7 @@ class App {
 
     for (const signal of inputSignals) {
       if (signal.data.length > 0) {
-        this.addChartItem(container, signal.title, signal.data, signal.color, signal.nodeId);
+        this.addChartItem(container, signal.title, signal.data, signal.color, signal.nodeId, signal.axis);
       }
     }
 
@@ -2899,7 +2992,7 @@ class App {
     }
     for (const probe of orderedProbes) {
       if (probe.data.length > 0) {
-        this.addChartItem(container, probe.title, probe.data, probe.color, probe.nodeId);
+        this.addChartItem(container, probe.title, probe.data, probe.color, probe.nodeId, probe.axis);
       }
     }
 
@@ -2908,11 +3001,6 @@ class App {
       requestAnimationFrame(() => this.updateChartScrollbar());
       return;
     }
-
-    // Cursor readout
-    this.cursorReadout = document.createElement('div');
-    this.cursorReadout.style.cssText = 'position:sticky;bottom:0;background:#0d1b2a;border-top:1px solid #1b2838;padding:6px 10px;font-size:11px;color:#aaa;z-index:10;';
-    container.appendChild(this.cursorReadout);
 
     // Chart events
     this.initChartEvents();
@@ -2929,7 +3017,19 @@ class App {
     return colors[index % colors.length];
   }
 
-  addChartItem(container, title, data, color, nodeId = null) {
+  getSignalAxis(signal) {
+    if (signal && signal._chartType === 'spectrum') {
+      return {
+        type: 'spectrum',
+        values: signal._xValues || [],
+        unit: signal._xUnit || 'Hz',
+        label: signal._xLabel || '频率'
+      };
+    }
+    return { type: 'sample', values: null, unit: '', label: '采样' };
+  }
+
+  addChartItem(container, title, data, color, nodeId = null, axis = this.getSignalAxis(data)) {
     const item = document.createElement('div');
     item.className = 'chart-item';
     item.draggable = true;
@@ -2942,6 +3042,9 @@ class App {
     label.appendChild(dot);
     label.appendChild(document.createTextNode(`${title} (${data.length} 点)`));
     item.appendChild(label);
+    const readout = document.createElement('div');
+    readout.className = 'chart-item-readout';
+    item.appendChild(readout);
     const canvas = document.createElement('canvas');
     canvas.style.height = '120px';
     canvas.style.display = 'block';
@@ -2994,7 +3097,7 @@ class App {
     });
 
     container.appendChild(item);
-    this.chartDataList.push({ title, data, color, canvas, nodeId });
+    this.chartDataList.push({ title, data, color, canvas, nodeId, axis, readout });
   }
 
   focusNode(node) {
@@ -3135,7 +3238,6 @@ class App {
       }
 
       this.redrawCharts();
-      this.updateCursorReadout();
     };
     scroll.addEventListener('mousemove', this._chartMouseMove);
 
@@ -3146,7 +3248,6 @@ class App {
         scroll.style.cursor = '';
       }
       this.redrawCharts();
-      if (this.cursorReadout) this.cursorReadout.textContent = '';
     };
     scroll.addEventListener('mouseleave', this._chartMouseLeave);
 
@@ -3160,30 +3261,46 @@ class App {
     document.addEventListener('mouseup', this._chartMouseUp);
   }
 
-  updateCursorReadout() {
-    if (!this.cursorReadout || this.cursorX < 0) return;
-    const parts = [];
-    for (const item of this.chartDataList) {
-      const dw = item.canvas.clientWidth;
-      const viewStart = this.chartOffset;
-      const viewW = 1 / this.chartZoom;
-      const dataIdx = Math.floor((viewStart + (this.cursorX / dw) * viewW) * item.data.length);
-      const idx = Math.max(0, Math.min(item.data.length - 1, dataIdx));
-      parts.push(`${item.title}: ${item.data[idx]?.toFixed(4) ?? '-'}`);
-    }
-    const timeIdx = this.chartDataList.length > 0 ?
-      Math.floor((this.chartOffset + (this.cursorX / this.chartDataList[0].canvas.clientWidth) * (1 / this.chartZoom)) * this.chartDataList[0].data.length) : 0;
-    parts.unshift(`采样 #${timeIdx}`);
-    this.cursorReadout.textContent = parts.join('  |  ');
-  }
-
   redrawCharts() {
     for (const item of this.chartDataList) {
-      this.drawWaveform(item.canvas, item.data, item.color);
+      this.drawWaveform(item.canvas, item.data, item.color, item.axis);
+      this.updateChartItemReadout(item);
     }
   }
 
-  drawWaveform(canvas, data, color) {
+  getChartCursorIndex(item) {
+    const dw = item.canvas.clientWidth || 1;
+    const viewStart = this.chartOffset;
+    const viewW = 1 / this.chartZoom;
+    const dataIdx = Math.floor((viewStart + (this.cursorX / dw) * viewW) * item.data.length);
+    return Math.max(0, Math.min(item.data.length - 1, dataIdx));
+  }
+
+  getChartXValue(axis, idx, length) {
+    if (axis && axis.values && axis.values[idx] !== undefined) return axis.values[idx];
+    return idx;
+  }
+
+  formatChartX(axis, x) {
+    if (axis && axis.unit === 'Hz') return `频率 ${x.toFixed(2)} Hz`;
+    return `采样 #${Math.round(x)}`;
+  }
+
+  updateChartItemReadout(item) {
+    if (!item.readout || !item.data.length) return;
+    if (this.cursorX < 0) {
+      const start = this.getChartXValue(item.axis, 0, item.data.length);
+      const end = this.getChartXValue(item.axis, item.data.length - 1, item.data.length);
+      item.readout.textContent = `${this.formatChartX(item.axis, start)} - ${this.formatChartX(item.axis, end)}`;
+      return;
+    }
+    const idx = this.getChartCursorIndex(item);
+    const x = this.getChartXValue(item.axis, idx, item.data.length);
+    const value = item.data[idx];
+    item.readout.textContent = `${this.formatChartX(item.axis, x)}  幅值 ${value?.toFixed(4) ?? '-'}`;
+  }
+
+  drawWaveform(canvas, data, color, axis = this.getSignalAxis(data)) {
     const dpr = window.devicePixelRatio || 1;
     const dw = canvas.clientWidth;
     const dh = canvas.clientHeight;
@@ -3259,6 +3376,7 @@ class App {
     ctx.fillText(labelMin.toFixed(4), 4, dh - 4);
     ctx.textAlign = 'right';
     ctx.fillText(`${this.chartZoom.toFixed(1)}x`, dw - 4, 14);
+    this.drawXAxisLabels(ctx, dw, dh, axis, iStart, iEnd, data.length);
 
     // Cursor line
     if (this.cursorX >= 0 && this.cursorX <= dw) {
@@ -3276,6 +3394,7 @@ class App {
       const dataIdx = iStart + ratio * (iEnd - iStart);
       const idx = Math.max(iStart, Math.min(iEnd - 1, Math.floor(dataIdx)));
       const v = data[idx] ?? 0;
+      const x = this.getChartXValue(axis, idx, data.length);
       const y = dh - pad - ((v - min) / range) * (dh - 2 * pad);
       ctx.fillStyle = '#e94560';
       ctx.beginPath();
@@ -3287,8 +3406,19 @@ class App {
       ctx.font = 'bold 10px sans-serif';
       ctx.textAlign = 'left';
       const labelX = this.cursorX + 8 > dw - 40 ? this.cursorX - 48 : this.cursorX + 8;
-      ctx.fillText(v.toFixed(3), labelX, y - 6);
+      ctx.fillText(`${this.formatChartX(axis, x)} ${v.toFixed(3)}`, labelX, y - 6);
     }
+  }
+
+  drawXAxisLabels(ctx, dw, dh, axis, iStart, iEnd, length) {
+    const startX = this.getChartXValue(axis, iStart, length);
+    const endX = this.getChartXValue(axis, Math.max(iStart, iEnd - 1), length);
+    ctx.fillStyle = '#666';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(this.formatChartX(axis, startX), dw * 0.35, dh - 4);
+    ctx.textAlign = 'right';
+    ctx.fillText(this.formatChartX(axis, endX), dw - 4, dh - 4);
   }
 
   // ---- Persistence ----
