@@ -96,6 +96,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .node-bandpass { --node-color: #9cdcfe; }
 .node-weighted { --node-color: #c586c0; }
 .node-firlinear { --node-color: #4fc1ff; }
+.node-madfilter { --node-color: #ce9178; }
 .node-fft { --node-color: #dcdcaa; }
 .node-custom { --node-color: #6a9955; }
 .node-custom { display: flex; flex-direction: column; }
@@ -114,6 +115,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .node-splitter { --node-color: #d7ba7d; }
 .node-switch { --node-color: var(--vscode-warning); }
 .node-multiplexer { --node-color: #4ec9b0; }
+.node-weightedmixer { --node-color: #d7ba7d; }
 .node-multiplier { --node-color: #3794ff; }
 .node-adder { --node-color: var(--vscode-success); }
 .node-subtractor { --node-color: var(--vscode-danger); }
@@ -170,6 +172,9 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .chart-item { margin-bottom: 12px; }
 .chart-item-title { font-size: 11px; color: var(--vscode-muted); margin-bottom: 4px; padding-left: 4px; display: flex; align-items: center; gap: 6px; }
 .chart-item-title .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.chart-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chart-visibility-toggle { margin-left: auto; padding: 2px 8px; border: 1px solid var(--vscode-border); border-radius: 3px; background: transparent; color: var(--vscode-muted); font-size: 10px; cursor: pointer; }
+.chart-visibility-toggle:hover { background: var(--vscode-hover); color: var(--vscode-text); }
 .chart-item-readout { font-size: 10px; color: var(--vscode-muted); margin: -2px 0 4px; padding-left: 4px; min-height: 13px; }
 .chart-item canvas { width: 100%; height: 120px; background: var(--vscode-bg); border-radius: 4px; border: 1px solid var(--vscode-border); display: block; cursor: crosshair; }
 .chart-item.dragging { opacity: 0.4; }
@@ -177,7 +182,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 
 /* ========== Scrollbar ========== */
 .chart-scroll::-webkit-scrollbar { width: 0; height: 0; }
-.chart-scrollbar { position: relative; flex: 0 0 16px; width: 16px; min-width: 16px; max-width: 16px; background: var(--vscode-tab); box-shadow: inset 1px 0 var(--vscode-border); z-index: 20; cursor: pointer; }
+.chart-scrollbar { position: relative; flex: 0 0 32px; width: 32px; min-width: 32px; max-width: 32px; background: var(--vscode-tab); box-shadow: inset 1px 0 var(--vscode-border); z-index: 20; cursor: pointer; }
 .chart-scrollbar-thumb { position: absolute; left: 0; right: 0; min-height: 36px; background: #5a5a5a; border-radius: 3px; cursor: grab; }
 .chart-scrollbar-thumb:hover, .chart-scrollbar-thumb.dragging { background: var(--vscode-accent); }
 ::-webkit-scrollbar { width: 6px; }
@@ -188,6 +193,10 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .empty-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: var(--vscode-muted); font-size: 14px; pointer-events: none; line-height: 2; opacity: 0.65; }
 
 /* ========== Toast ========== */
+.run-progress { position: fixed; top: 0; left: 180px; right: 0; height: 24px; opacity: 0; transform: translateY(-24px); pointer-events: none; z-index: 5000; background: var(--vscode-panel); border-bottom: 1px solid var(--vscode-border); transition: opacity 0.15s, transform 0.15s; overflow: hidden; }
+.run-progress.active { opacity: 1; transform: translateY(0); pointer-events: none; }
+.run-progress-fill { height: 100%; width: 0%; background: var(--vscode-accent); transition: width 0.12s linear; opacity: 0.35; }
+.run-progress-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--vscode-text); font-size: 11px; font-weight: 600; }
 .toast { position: fixed; bottom: 20px; right: 20px; padding: 10px 20px; border-radius: 6px; font-size: 13px; z-index: 9999; animation: fadeIn 0.3s; }
 .toast-info { background: var(--vscode-accent); color: white; }
 .toast-error { background: var(--vscode-danger); color: white; }
@@ -209,6 +218,10 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 </style>
 </head>
 <body>
+<div class="run-progress" id="runProgress" aria-hidden="true">
+  <div class="run-progress-fill" id="runProgressFill"></div>
+  <div class="run-progress-label" id="runProgressLabel">运行中</div>
+</div>
 <div class="app">
   <div class="sidebar" id="sidebar">
     <div class="sidebar-title">信号处理实验室</div>
@@ -226,6 +239,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
       <div class="sidebar-item" onclick="app.addNode('bandpass')"><span class="dot" style="background:#8e44ad"></span>带通滤波</div>
       <div class="sidebar-item" onclick="app.addNode('weighted')"><span class="dot" style="background:#7d3c98"></span>一阶 IIR 平滑</div>
       <div class="sidebar-item" onclick="app.addNode('firlinear')"><span class="dot" style="background:#5dade2"></span>FIR 线性相位</div>
+      <div class="sidebar-item" onclick="app.addNode('madfilter')"><span class="dot" style="background:#ce9178"></span>Hampel滤波</div>
       <div class="sidebar-item" onclick="app.addNode('kalman')"><span class="dot" style="background:#2980b9"></span>卡尔曼滤波</div>
     </div>
     <div class="sidebar-group">
@@ -235,6 +249,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
     <div class="sidebar-group">
       <div class="sidebar-group-title">运算与变换</div>
       <div class="sidebar-item" onclick="app.addNode('multiplier')"><span class="dot" style="background:#2980b9"></span>乘法器</div>
+      <div class="sidebar-item" onclick="app.addNode('weightedmixer')"><span class="dot" style="background:#d7ba7d"></span>加权合成器</div>
       <div class="sidebar-item" onclick="app.addNode('adder')"><span class="dot" style="background:#2ecc71"></span>加法器</div>
       <div class="sidebar-item" onclick="app.addNode('subtractor')"><span class="dot" style="background:#e74c3c"></span>减法器</div>
       <div class="sidebar-item" onclick="app.addNode('inverter')"><span class="dot" style="background:#af7ac5"></span>反相器</div>
@@ -475,6 +490,36 @@ const DSP = {
     return out;
   },
 
+  median(values) {
+    if (!values.length) return 0;
+    const sorted = values.slice().sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  },
+
+  hampelMadFilter(signal, windowSize, threshold, scale) {
+    if (!signal.length) return { filtered: [], mad: [] };
+    const size = Math.max(1, Math.floor(windowSize || 1));
+    const half = Math.floor(size / 2);
+    threshold = Math.max(0, threshold);
+    const filtered = [];
+    const madTrace = [];
+    for (let i = 0; i < signal.length; i++) {
+      const window = [];
+      for (let j = i - half; j <= i + half; j++) {
+        if (j >= 0 && j < signal.length) window.push(Number(signal[j]) || 0);
+      }
+      const med = DSP.median(window);
+      const deviations = window.map(v => Math.abs(v - med));
+      const mad = DSP.median(deviations);
+      const sigma = Math.max(0, scale) * mad;
+      const current = Number(signal[i]) || 0;
+      madTrace.push(mad);
+      filtered.push(Math.abs(current - med) > threshold * sigma ? med : current);
+    }
+    return { filtered, mad: madTrace };
+  },
+
   causalWindowEntropy(signal, windowSize, bins) {
     if (!signal.length) return [];
     const binCount = Math.max(1, Math.floor(bins || 1));
@@ -641,6 +686,19 @@ const NODE_DEFS = {
       { id: 'taps', label: '抽头数量 (奇数)', type: 'number', default: 31 }
     ]
   },
+  madfilter: {
+    type: 'madfilter', title: 'Hampel滤波器',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [
+      { id: 'out', label: '滤波结果' },
+      { id: 'mad', label: 'MAD' }
+    ],
+    params: [
+      { id: 'size', label: '窗口大小', type: 'number', default: 7 },
+      { id: 'threshold', label: '阈值倍数', type: 'number', default: 3 },
+      { id: 'scale', label: 'MAD 缩放系数', type: 'number', default: 1.4826 }
+    ]
+  },
   fft: {
     type: 'fft', title: 'FFT 频谱',
     inputs: [{ id: 'in', label: '输入' }],
@@ -696,6 +754,15 @@ const NODE_DEFS = {
       { id: 'count', label: '端口数量', type: 'number', default: 2, affectsPorts: true },
       { id: 'mode', label: '方向', type: 'select', options: ['多入一出', '一入多出'], default: '多入一出', affectsPorts: true },
       { id: 'routes', label: '启用通道', type: 'routeChecks', default: {} }
+    ]
+  },
+  weightedmixer: {
+    type: 'weightedmixer', title: '加权合成器',
+    inputs: [{ id: 'in1', label: '输入1' }, { id: 'in2', label: '输入2' }],
+    outputs: [{ id: 'out', label: '合成输出' }],
+    params: [
+      { id: 'count', label: '输入数量', type: 'number', default: 2, affectsPorts: true },
+      { id: 'weights', label: '输入权重', type: 'inputWeights', default: {} }
     ]
   },
   cutbeg: {
@@ -909,10 +976,11 @@ const NODE_DEFS = {
   probe: {
     type: 'probe', title: '示波器',
     inputs: [{ id: 'in', label: '输入' }],
-    outputs: [],
+    outputs: [{ id: 'out', label: '输出' }],
     params: [
       { id: 'name', label: '示波器名称', type: 'text', default: '' },
-      { id: 'color', label: '颜色', type: 'color', default: '' }
+      { id: 'color', label: '颜色', type: 'color', default: '' },
+      { id: 'visible', label: '显示波形', type: 'checkbox', default: true }
     ]
   },
   csvoutput: {
@@ -936,6 +1004,7 @@ class App {
     this.connections = [];
     this.sampleRate = 1000;
     this.probeData = new Map();
+    this.chartVisibility = new Map();
     this.nodeCache = new Map(); // nodeId -> { portId -> data[] }
 
     this.canvasPanel = document.getElementById('canvasPanel');
@@ -946,6 +1015,9 @@ class App {
     this.chartScroll = document.getElementById('chartScroll');
     this.chartScrollbar = document.getElementById('chartScrollbar');
     this.chartScrollbarThumb = document.getElementById('chartScrollbarThumb');
+    this.runProgress = document.getElementById('runProgress');
+    this.runProgressFill = document.getElementById('runProgressFill');
+    this.runProgressLabel = document.getElementById('runProgressLabel');
 
     this.draggingNode = null;
     this.dragOffset = { x: 0, y: 0 };
@@ -960,6 +1032,7 @@ class App {
     this.panStart = { x: 0, y: 0 };
     this.panOffset = { x: 0, y: 0 };
     this.canvasZoom = 1;
+    this._isRunning = false;
     this.sidebarDragType = null;
     this.lastCanvasMousePoint = null;
     this.marquee = null;
@@ -1414,6 +1487,10 @@ class App {
     return Math.max(1, Math.min(12, Math.floor(node.params.count || 1)));
   }
 
+  getWeightedMixerInputCount(node) {
+    return Math.max(1, Math.min(12, Math.floor(node.params.count || 2)));
+  }
+
   getCustomInputCount(node) {
     return Math.max(1, Math.min(12, Math.floor(node.params.inputCount || 1)));
   }
@@ -1463,6 +1540,10 @@ class App {
     if (node.type === 'multiplexer') {
       const count = this.getMultiplexerPortCount(node);
       if (this.getMultiplexerMode(node) === '一入多出') return [{ id: 'in', label: '输入' }];
+      return Array.from({ length: count }, (_, i) => ({ id: `in${i + 1}`, label: `输入${i + 1}` }));
+    }
+    if (node.type === 'weightedmixer') {
+      const count = this.getWeightedMixerInputCount(node);
       return Array.from({ length: count }, (_, i) => ({ id: `in${i + 1}`, label: `输入${i + 1}` }));
     }
     return node.def.inputs;
@@ -1659,6 +1740,8 @@ class App {
         body.appendChild(wrap);
       } else if (p.type === 'routeChecks') {
         this.renderRouteChecks(body, node, p);
+      } else if (p.type === 'inputWeights') {
+        this.renderInputWeights(body, node, p);
       } else if (p.type === 'portNames') {
         this.renderPortNameInputs(body, node, p);
       } else if (p.type === 'select') {
@@ -1864,6 +1947,35 @@ class App {
       wrap.appendChild(row);
     }
     this.renderMultiplexerRouteButtons(body, node, wrap);
+    body.appendChild(wrap);
+  }
+
+  renderInputWeights(body, node, p) {
+    if (!node.params[p.id] || typeof node.params[p.id] !== 'object') node.params[p.id] = {};
+    const ports = this.getNodeInputs(node);
+    const wrap = document.createElement('div');
+    wrap.className = 'port-name-list';
+    this.markParamControl(wrap, p);
+
+    ports.forEach((port, i) => {
+      const row = document.createElement('div');
+      row.className = 'port-name-row';
+      const hint = document.createElement('span');
+      hint.textContent = port.label;
+      const inp = document.createElement('input');
+      inp.type = 'number';
+      inp.step = '0.001';
+      inp.value = node.params[p.id][port.id] !== undefined ? node.params[p.id][port.id] : 1;
+      this.markParamControl(inp, p);
+      inp.oninput = () => {
+        node.params[p.id][port.id] = parseFloat(inp.value) || 0;
+        this.scheduleSave();
+      };
+      row.appendChild(hint);
+      row.appendChild(inp);
+      wrap.appendChild(row);
+    });
+
     body.appendChild(wrap);
   }
 
@@ -2639,6 +2751,16 @@ class App {
         outputs['out'] = inp.length ? DSP.firFilter(inp, coeffs) : [];
         break;
       }
+      case 'madfilter': {
+        const inp = this.getUpstreamData(node, 'in');
+        const windowSize = Math.max(1, Math.floor(node.params.size || 1));
+        const threshold = node.params.threshold !== undefined ? node.params.threshold : 3;
+        const scale = node.params.scale !== undefined ? node.params.scale : 1.4826;
+        const result = inp.length ? DSP.hampelMadFilter(inp, windowSize, threshold, scale) : { filtered: [], mad: [] };
+        outputs['out'] = result.filtered;
+        outputs['mad'] = result.mad;
+        break;
+      }
       case 'fft': {
         const inp = this.getUpstreamData(node, 'in');
         outputs['out'] = inp.length ? DSP.fftMagnitudeSpectrum(inp, this.sampleRate, node.params.size || 1024, node.params.minFreq, node.params.maxFreq) : [];
@@ -2694,6 +2816,24 @@ class App {
         } else {
           outputs['out'] = [...this.getUpstreamData(node, `in${selectedRoute}`)];
         }
+        break;
+      }
+      case 'weightedmixer': {
+        const inputs = this.getNodeInputs(node).map(port => this.getUpstreamData(node, port.id));
+        const weights = node.params.weights || {};
+        const len = inputs.reduce((max, data) => Math.max(max, data.length), 0);
+        const out = [];
+        for (let i = 0; i < len; i++) {
+          let sum = 0;
+          inputs.forEach((data, index) => {
+            const portId = `in${index + 1}`;
+            const rawWeight = weights[portId] !== undefined ? Number(weights[portId]) : 1;
+            const weight = Number.isFinite(rawWeight) ? rawWeight : 0;
+            sum += (data[i] !== undefined ? data[i] : 0) * weight;
+          });
+          out.push(sum);
+        }
+        outputs['out'] = out;
         break;
       }
       case 'multiplier': {
@@ -3009,11 +3149,13 @@ class App {
         break;
       }
       case 'probe': {
-        if (this.isInputBlocked(node, 'in')) break;
         const inp = this.getUpstreamData(node, 'in');
+        outputs['out'] = [...inp];
+        if (this.isInputBlocked(node, 'in')) break;
         const name = node.params.name || `示波器 #${node.id}`;
         const color = node.params.color || this.randomColor();
-        this.probeData.set(node.id, { title: name, data: inp, color, nodeId: node.id, axis: this.getSignalAxis(inp) });
+        const visible = node.params.visible !== false;
+        this.probeData.set(node.id, { title: name, data: inp, color, nodeId: node.id, axis: this.getSignalAxis(inp), visible });
         break;
       }
     }
@@ -3053,38 +3195,80 @@ class App {
     );
   }
 
-  run(options = {}) {
+  nextFrame() {
+    return new Promise(resolve => requestAnimationFrame(() => resolve()));
+  }
+
+  showRunProgress(label = '准备运行') {
+    if (!this.runProgress) return;
+    this.runProgress.classList.add('active');
+    this.runProgress.setAttribute('aria-hidden', 'false');
+    this.updateRunProgress(0, 1, label);
+  }
+
+  updateRunProgress(completed, total, label) {
+    const safeTotal = Math.max(1, total || 1);
+    const percent = Math.max(0, Math.min(100, completed / safeTotal * 100));
+    if (this.runProgressFill) this.runProgressFill.style.width = `${percent}%`;
+    if (this.runProgressLabel) this.runProgressLabel.textContent = `${label || '运行中'} ${Math.round(percent)}%`;
+  }
+
+  hideRunProgress() {
+    if (!this.runProgress) return;
+    this.updateRunProgress(1, 1, '运行完成');
+    this.runProgress.classList.remove('active');
+    this.runProgress.setAttribute('aria-hidden', 'true');
+  }
+
+  async run(options = {}) {
+    if (this._isRunning) { this.toast('正在运行，请稍候', 'info'); return; }
+    this._isRunning = true;
     const runOptions = {
       autoExportCsv: options.autoExportCsv !== undefined ? options.autoExportCsv : this.isAutoExportEnabled(),
       manualCsvExportNodeId: options.manualCsvExportNodeId
     };
-    this.probeData.clear();
-    this.nodeCache.clear();
-    this.sampleRate = 1000;
 
-    const inputNodes = this.nodes.filter(n => n.type === 'input');
-    if (inputNodes.length === 0) { this.toast('请先添加 CSV 输入节点', 'error'); return; }
+    this.showRunProgress('准备运行');
+    await this.nextFrame();
 
-    // Execute all nodes
-    for (const node of this.nodes) this.executeNode(node, runOptions);
+    try {
+      this.probeData.clear();
+      this.nodeCache.clear();
+      this.sampleRate = 1000;
 
-    const connectedInputNodes = inputNodes.filter(n => this.isInputSignalVisible(n));
+      const inputNodes = this.nodes.filter(n => n.type === 'input');
+      if (inputNodes.length === 0) { this.toast('请先添加 CSV 输入节点', 'error'); return; }
 
-    const inputSignals = [];
-    for (const [index, node] of connectedInputNodes.entries()) {
-      const cached = this.nodeCache.get(node.id);
-      if (cached && cached.out) {
-        inputSignals.push({
-          title: this.getInputChartTitle(node),
-          data: cached.out,
-          color: this.getInputChartColor(index),
-          nodeId: node.id
-        });
+      const totalNodes = Math.max(1, this.nodes.length);
+      for (const [index, node] of this.nodes.entries()) {
+        this.updateRunProgress(index, totalNodes, `正在运行 ${node.def.title}`);
+        await this.nextFrame();
+        this.executeNode(node, runOptions);
       }
-    }
+      this.updateRunProgress(totalNodes, totalNodes, '生成图表');
+      await this.nextFrame();
 
-    this.renderChart(inputSignals);
-    this.toast('运行完成', 'success');
+      const connectedInputNodes = inputNodes.filter(n => this.isInputSignalVisible(n));
+
+      const inputSignals = [];
+      for (const [index, node] of connectedInputNodes.entries()) {
+        const cached = this.nodeCache.get(node.id);
+        if (cached && cached.out) {
+          inputSignals.push({
+            title: this.getInputChartTitle(node),
+            data: cached.out,
+            color: this.getInputChartColor(index),
+            nodeId: node.id
+          });
+        }
+      }
+
+      this.renderChart(inputSignals);
+      this.toast('运行完成', 'success');
+    } finally {
+      this._isRunning = false;
+      this.hideRunProgress();
+    }
   }
 
   // ---- Chart Rendering ----
@@ -3115,7 +3299,7 @@ class App {
     }
     for (const probe of orderedProbes) {
       if (probe.data.length > 0) {
-        this.addChartItem(container, probe.title, probe.data, probe.color, probe.nodeId, probe.axis);
+        this.addChartItem(container, probe.title, probe.data, probe.color, probe.nodeId, probe.axis, probe.visible);
       }
     }
 
@@ -3152,10 +3336,31 @@ class App {
     return { type: 'sample', values: null, unit: '', label: '采样' };
   }
 
-  addChartItem(container, title, data, color, nodeId = null, axis = this.getSignalAxis(data)) {
+  getChartVisibilityKey(nodeId, title) {
+    return nodeId !== null ? `node:${nodeId}` : `title:${title}`;
+  }
+
+  setChartItemVisible(chartItem, visible) {
+    chartItem.visible = visible;
+    this.chartVisibility.set(chartItem.visibilityKey, visible);
+    chartItem.item.classList.toggle('collapsed', !visible);
+    chartItem.canvas.style.display = visible ? 'block' : 'none';
+    chartItem.readout.style.display = visible ? '' : 'none';
+    chartItem.toggle.textContent = visible ? '隐藏' : '显示';
+    chartItem.toggle.title = visible ? '隐藏波形' : '显示波形';
+    const node = chartItem.nodeId !== null ? this.nodes.find(n => n.id === chartItem.nodeId) : null;
+    if (node && node.type === 'probe') node.params.visible = visible;
+    this.updateChartScrollbar();
+    this.redrawCharts();
+    this.scheduleSave();
+  }
+
+  addChartItem(container, title, data, color, nodeId = null, axis = this.getSignalAxis(data), visible = true) {
     const item = document.createElement('div');
     item.className = 'chart-item';
     item.draggable = true;
+    const visibilityKey = this.getChartVisibilityKey(nodeId, title);
+    const resolvedVisible = this.chartVisibility.has(visibilityKey) ? this.chartVisibility.get(visibilityKey) : visible !== false;
     const label = document.createElement('div');
     label.className = 'chart-item-title';
     label.style.cursor = 'grab';
@@ -3163,15 +3368,31 @@ class App {
     dot.className = 'dot';
     dot.style.background = color;
     label.appendChild(dot);
-    label.appendChild(document.createTextNode(`${title} (${data.length} 点)`));
+    const name = document.createElement('span');
+    name.className = 'chart-item-name';
+    name.textContent = `${title} (${data.length} 点)`;
+    label.appendChild(name);
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'chart-visibility-toggle';
+    toggle.textContent = resolvedVisible ? '隐藏' : '显示';
+    toggle.title = resolvedVisible ? '隐藏波形' : '显示波形';
+    label.appendChild(toggle);
     item.appendChild(label);
     const readout = document.createElement('div');
     readout.className = 'chart-item-readout';
     item.appendChild(readout);
     const canvas = document.createElement('canvas');
     canvas.style.height = '120px';
-    canvas.style.display = 'block';
+    canvas.style.display = resolvedVisible ? 'block' : 'none';
+    readout.style.display = resolvedVisible ? '' : 'none';
     item.appendChild(canvas);
+    const chartItem = { title, data, color, canvas, nodeId, axis, readout, item, toggle, visibilityKey, visible: resolvedVisible };
+    item.classList.toggle('collapsed', !resolvedVisible);
+    toggle.onclick = (e) => {
+      e.stopPropagation();
+      this.setChartItemVisible(chartItem, !chartItem.visible);
+    };
 
     // Drag reorder
     item.addEventListener('dragstart', (e) => {
@@ -3220,7 +3441,7 @@ class App {
     });
 
     container.appendChild(item);
-    this.chartDataList.push({ title, data, color, canvas, nodeId, axis, readout });
+    this.chartDataList.push(chartItem);
   }
 
   focusNode(node) {
@@ -3237,10 +3458,10 @@ class App {
 
   initChartScrollbar() {
     if (!this.chartScrollbar || !this.chartScrollbarThumb) return;
-    this.chartScrollbar.style.width = '16px';
-    this.chartScrollbar.style.flexBasis = '16px';
-    this.chartScrollbar.style.minWidth = '16px';
-    this.chartScrollbar.style.maxWidth = '16px';
+    this.chartScrollbar.style.width = '32px';
+    this.chartScrollbar.style.flexBasis = '32px';
+    this.chartScrollbar.style.minWidth = '32px';
+    this.chartScrollbar.style.maxWidth = '32px';
     this._chartScrollbarDragging = false;
     this._chartScrollbarWheel = (e) => {
       e.preventDefault();
@@ -3386,6 +3607,7 @@ class App {
 
   redrawCharts() {
     for (const item of this.chartDataList) {
+      if (item.visible === false) continue;
       this.drawWaveform(item.canvas, item.data, item.color, item.axis);
       this.updateChartItemReadout(item);
     }
@@ -3562,6 +3784,7 @@ class App {
       chartZoom: this.chartZoom || 1,
       chartOffset: this.chartOffset || 0,
       chartOrder: this.chartDataList ? this.chartDataList.map(d => d.nodeId !== null ? d.nodeId : d.title) : [],
+      chartVisibility: this.chartVisibility ? Object.fromEntries(this.chartVisibility) : {},
       panelFlex: {
         left: this.canvasPanel.style.flex || '',
         right: document.getElementById('chartPanel').style.flex || ''
@@ -3601,6 +3824,7 @@ class App {
     this.chartZoom = json.chartZoom || 1;
     this.chartOffset = json.chartOffset || 0;
     this._savedChartOrder = json.chartOrder || [];
+    this.chartVisibility = new Map(Object.entries(json.chartVisibility || {}).map(([key, value]) => [key, value !== false]));
 
     // Restore pan offset and zoom
     this.panOffset = json.panOffset ? { x: json.panOffset.x || 0, y: json.panOffset.y || 0 } : { x: 0, y: 0 };
