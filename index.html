@@ -35,7 +35,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; user-select: none; -we
 /* ========== Toolbar (removed - using sidebar) ========== */
 
 /* ========== Viewport ========== */
-.viewport { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: visible; z-index: 3; pointer-events: none; }
+.viewport { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: visible; z-index: 3; }
 
 /* ========== Canvas Grid ========== */
 .grid-canvas { position: absolute; top: 0; left: 0; pointer-events: none; background-color: #1e1e1e; z-index: 1; }
@@ -101,6 +101,11 @@ html, body { width: 100%; height: 100%; overflow: hidden; user-select: none; -we
 .node-weighted { --node-color: #c586c0; }
 .node-firlinear { --node-color: #4fc1ff; }
 .node-madfilter { --node-color: #ce9178; }
+.node-dcoffset { --node-color: #e06c75; }
+.node-differentiator { --node-color: #56b6c2; }
+.node-stdwin { --node-color: #98c379; }
+.node-interval2bpm { --node-color: #c678dd; }
+.node-peakdetector { --node-color: #e5c07b; }
 .node-fft { --node-color: #dcdcaa; }
 .node-custom { --node-color: #6a9955; }
 .node-custom { display: flex; flex-direction: column; }
@@ -264,6 +269,13 @@ html, body { width: 100%; height: 100%; overflow: hidden; user-select: none; -we
       <div class="sidebar-item" onclick="app.addNode('limiter')"><span class="dot" style="background:#c0392b"></span>限位器</div>
       <div class="sidebar-item" onclick="app.addNode('phaseshifter')"><span class="dot" style="background:#8e44ad"></span>移相器</div>
       <div class="sidebar-item" onclick="app.addNode('hysteresis')"><span class="dot" style="background:#e74c3c"></span>迟滞比较器</div>
+      <div class="sidebar-item" onclick="app.addNode('dcoffset')"><span class="dot" style="background:#e06c75"></span>去直流偏置</div>
+      <div class="sidebar-item" onclick="app.addNode('differentiator')"><span class="dot" style="background:#56b6c2"></span>微分器</div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">特征提取</div>
+      <div class="sidebar-item" onclick="app.addNode('peakdetector')"><span class="dot" style="background:#e5c07b"></span>峰谷检测器</div>
+      <div class="sidebar-item" onclick="app.addNode('interval2bpm')"><span class="dot" style="background:#c678dd"></span>间隔→BPM</div>
     </div>
     <div class="sidebar-group">
       <div class="sidebar-group-title">窗口统计</div>
@@ -272,6 +284,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; user-select: none; -we
       <div class="sidebar-item" onclick="app.addNode('maxwin')"><span class="dot" style="background:#c0392b"></span>Max Win</div>
       <div class="sidebar-item" onclick="app.addNode('minwin')"><span class="dot" style="background:#2980b9"></span>Min Win</div>
       <div class="sidebar-item" onclick="app.addNode('extremewin')"><span class="dot" style="background:#e67e22"></span>极值窗口</div>
+      <div class="sidebar-item" onclick="app.addNode('stdwin')"><span class="dot" style="background:#98c379"></span>滑动标准差</div>
       <div class="sidebar-item" onclick="app.addNode('entropy')"><span class="dot" style="background:#f4d03f"></span>因果窗口熵</div>
       <div class="sidebar-item" onclick="app.addNode('squarewave')"><span class="dot" style="background:#f39c12"></span>矩形波检测器</div>
     </div>
@@ -631,6 +644,126 @@ const DSP = {
       jitterOut.push(jitterValue);
     }
     return { score, period, duty, jitter: jitterOut };
+  },
+
+  dcOffset(signal) {
+    if (!signal.length) return [];
+    const mean = signal.reduce((sum, v) => sum + v, 0) / signal.length;
+    return signal.map(v => v - mean);
+  },
+
+  differentiator(signal) {
+    if (!signal.length) return [];
+    const out = [0];
+    for (let i = 1; i < signal.length; i++) out.push(signal[i] - signal[i - 1]);
+    return out;
+  },
+
+  slidingStdDev(signal, size) {
+    if (!signal.length) return [];
+    const half = Math.floor(size / 2);
+    const out = [];
+    for (let i = 0; i < signal.length; i++) {
+      let sum = 0, sumSq = 0, cnt = 0;
+      for (let j = i - half; j <= i + half; j++) {
+        if (j >= 0 && j < signal.length) { const v = signal[j]; sum += v; sumSq += v * v; cnt++; }
+      }
+      const mean = cnt ? sum / cnt : 0;
+      out.push(cnt > 1 ? Math.sqrt(Math.max(0, sumSq / cnt - mean * mean)) : 0);
+    }
+    return out;
+  },
+
+  intervalToBpm(intervals, sampleRate) {
+    if (!intervals.length) return [];
+    const sr = Number(sampleRate) || 0;
+    const out = [];
+    let held = 0;
+    for (const raw of intervals) {
+      const v = Number(raw);
+      if (sr > 0 && Number.isFinite(v) && v > 0) held = 60 * sr / v;
+      out.push(held);
+    }
+    return out;
+  },
+
+  peakValleyDetector(signal, trigger) {
+    const n = signal.length;
+    const empty = { out:[], out2:[], out3:[], out4:[], out5:[], out6:[], out7:[], out8:[], out9:[], out10:[] };
+    if (!n) return empty;
+    const trig = trigger || [];
+    const peakPulse = new Array(n).fill(0);
+    const valleyPulse = new Array(n).fill(0);
+    const peakToPeak = new Array(n).fill(0);
+    const valleyToValley = new Array(n).fill(0);
+    const trigPeakInterval = new Array(n).fill(0);
+    const trigValInterval = new Array(n).fill(0);
+    const detectedPeakToPeak = [];
+    const detectedValleyToValley = [];
+    const detectedTrigPeaks = [];
+    const detectedTrigVals = [];
+    const EPS = 1e-12;
+    let prevTrig = Number.isFinite(Number(trig[0])) ? Number(trig[0]) : 0;
+    let segment = null;
+    let lastPeakIdx = -1, lastValleyIdx = -1, lastRiseIdx = -1, lastFallIdx = -1;
+    for (let i = 1; i < n; i++) {
+      const rawTrig = Number(trig[i]);
+      const curTrig = Number.isFinite(rawTrig) ? rawTrig : prevTrig;
+      const edge = Math.abs(curTrig - prevTrig) > EPS;
+      if (edge) {
+        const isRising = curTrig > prevTrig;
+        if (segment) {
+          const idx = segment.index;
+          if (segment.type === 'peak') {
+            peakPulse[idx] = 1;
+            if (lastPeakIdx >= 0) { const interval = idx - lastPeakIdx; peakToPeak[idx] = interval; detectedPeakToPeak.push(interval); }
+            lastPeakIdx = idx;
+          } else {
+            valleyPulse[idx] = -1;
+            if (lastValleyIdx >= 0) { const interval = idx - lastValleyIdx; valleyToValley[idx] = interval; detectedValleyToValley.push(interval); }
+            lastValleyIdx = idx;
+          }
+        }
+        if (isRising) {
+          if (lastRiseIdx >= 0) { const interval = i - lastRiseIdx; trigPeakInterval[i] = interval; detectedTrigPeaks.push(interval); }
+          lastRiseIdx = i;
+        } else {
+          if (lastFallIdx >= 0) { const interval = i - lastFallIdx; trigValInterval[i] = interval; detectedTrigVals.push(interval); }
+          lastFallIdx = i;
+        }
+        const bandVal = Number.isFinite(Number(signal[i])) ? Number(signal[i]) : 0;
+        segment = { type: isRising ? 'peak' : 'valley', index: i, value: bandVal };
+        prevTrig = curTrig;
+      } else if (segment) {
+        const bandVal = Number.isFinite(Number(signal[i])) ? Number(signal[i]) : 0;
+        const isBetterPeak = segment.type === 'peak' && bandVal > segment.value;
+        const isBetterValley = segment.type === 'valley' && bandVal < segment.value;
+        if (isBetterPeak || isBetterValley) { segment.index = i; segment.value = bandVal; }
+      }
+    }
+    if (segment) {
+      const idx = segment.index;
+      if (segment.type === 'peak') {
+        peakPulse[idx] = 1;
+        if (lastPeakIdx >= 0) { const interval = idx - lastPeakIdx; peakToPeak[idx] = interval; detectedPeakToPeak.push(interval); }
+      } else {
+        valleyPulse[idx] = -1;
+        if (lastValleyIdx >= 0) { const interval = idx - lastValleyIdx; valleyToValley[idx] = interval; detectedValleyToValley.push(interval); }
+      }
+    }
+    let hp = 0, hv = 0, htp = 0, htv = 0;
+    for (let i = 0; i < n; i++) {
+      if (peakToPeak[i] !== 0) hp = peakToPeak[i]; else peakToPeak[i] = hp;
+      if (valleyToValley[i] !== 0) hv = valleyToValley[i]; else valleyToValley[i] = hv;
+      if (trigPeakInterval[i] !== 0) htp = trigPeakInterval[i]; else trigPeakInterval[i] = htp;
+      if (trigValInterval[i] !== 0) htv = trigValInterval[i]; else trigValInterval[i] = htv;
+    }
+    return {
+      out: peakPulse, out2: valleyPulse, out3: peakToPeak, out4: valleyToValley,
+      out5: detectedPeakToPeak, out6: detectedValleyToValley,
+      out7: trigPeakInterval, out8: detectedTrigPeaks,
+      out9: trigValInterval, out10: detectedTrigVals
+    };
   }
 };
 
@@ -1016,6 +1149,56 @@ const NODE_DEFS = {
       { id: 'name', label: '文件名', type: 'text', default: 'signal_output' },
       { id: 'autoExport', label: '允许自动导出', type: 'checkbox', default: false },
       { id: 'info', label: '说明', type: 'info', default: '可手动导出；自动导出需同时打开右上角开关' }
+    ]
+  },
+  dcoffset: {
+    type: 'dcoffset', title: '去直流偏置',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: '_info', label: '', type: 'info', default: 'y[i] = x[i] - mean(x)。消除信号直流分量，使波形围绕零点振荡。' }
+    ]
+  },
+  differentiator: {
+    type: 'differentiator', title: '微分器',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: '_info', label: '', type: 'info', default: 'y[i] = x[i] - x[i-1]。计算信号逐点变化率（一阶差分）。' }
+    ]
+  },
+  stdwin: {
+    type: 'stdwin', title: '滑动标准差',
+    inputs: [{ id: 'in', label: '输入' }],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'size', label: '窗口大小', type: 'number', default: 16 },
+      { id: '_info', label: '', type: 'info', default: '窗口内信号标准差，衡量局部波动强度。窗口越大越平滑。' }
+    ]
+  },
+  interval2bpm: {
+    type: 'interval2bpm', title: '间隔→BPM',
+    inputs: [{ id: 'in', label: '间隔输入' }],
+    outputs: [{ id: 'out', label: 'BPM' }],
+    params: [
+      { id: '_info', label: '', type: 'info', default: 'BPM = 60 × 采样率 / 间隔点数。输入为 0/负数/NaN 时保持上一有效值。' }
+    ]
+  },
+  peakdetector: {
+    type: 'peakdetector', title: '峰谷检测器',
+    inputs: [{ id: 'in', label: '信号' }, { id: 'in2', label: '触发' }],
+    outputs: [
+      { id: 'out', label: '峰值脉冲' }, { id: 'out2', label: '谷值脉冲' },
+      { id: 'out3', label: '峰峰间隔' }, { id: 'out4', label: '谷谷间隔' },
+      { id: 'out5', label: '峰峰间隔(紧凑)' }, { id: 'out6', label: '谷谷间隔(紧凑)' },
+      { id: 'out7', label: '触发峰间隔' }, { id: 'out8', label: '触发峰间隔(紧凑)' },
+      { id: 'out9', label: '触发谷间隔' }, { id: 'out10', label: '触发谷间隔(紧凑)' }
+    ],
+    params: [
+      { id: 'showBandIntervalSH', label: '峰谷间隔 S&H 输出', type: 'checkbox', default: true, affectsPorts: true },
+      { id: 'showBandIntervalCompact', label: '峰谷间隔 紧凑 输出', type: 'checkbox', default: true, affectsPorts: true },
+      { id: 'showTrigInterval', label: '触发间隔输出 (out7~10)', type: 'checkbox', default: false, affectsPorts: true },
+      { id: '_info', label: '', type: 'info', default: '配合迟滞比较器使用。in=带通信号, in2=迟滞触发(0/1)。触发边沿切分段，段内寻极值。' }
     ]
   }
 };
@@ -1645,6 +1828,27 @@ class App {
       if (this.getMultiplexerMode(node) === '一入多出') return Array.from({ length: count }, (_, i) => ({ id: `out${i + 1}`, label: `输出${i + 1}` }));
       return [{ id: 'out', label: '输出' }];
     }
+    if (node.type === 'peakdetector') {
+      const out = [
+        { id: 'out', label: '峰值脉冲' },
+        { id: 'out2', label: '谷值脉冲' }
+      ];
+      if (node.params.showBandIntervalSH !== false) {
+        out.push({ id: 'out3', label: '峰峰间隔' });
+        out.push({ id: 'out4', label: '谷谷间隔' });
+      }
+      if (node.params.showBandIntervalCompact !== false) {
+        out.push({ id: 'out5', label: '峰峰间隔(紧凑)' });
+        out.push({ id: 'out6', label: '谷谷间隔(紧凑)' });
+      }
+      if (node.params.showTrigInterval === true) {
+        out.push({ id: 'out7', label: '触发峰间隔' });
+        out.push({ id: 'out8', label: '触发峰间隔(紧凑)' });
+        out.push({ id: 'out9', label: '触发谷间隔' });
+        out.push({ id: 'out10', label: '触发谷间隔(紧凑)' });
+      }
+      return out;
+    }
     return node.def.outputs;
   }
 
@@ -1812,7 +2016,7 @@ class App {
         inp.checked = node.params[p.id] === true;
         inp.style.width = 'auto';
         inp.style.margin = '0';
-        inp.onchange = () => { node.params[p.id] = inp.checked; this.renderConnections(); this.scheduleSave(); };
+        inp.onchange = () => { node.params[p.id] = inp.checked; if (p.affectsPorts) this.rerenderNode(node); else this.renderConnections(); this.scheduleSave(); };
         wrap.appendChild(inp);
         wrap.appendChild(document.createTextNode(p.label));
         body.appendChild(wrap);
@@ -3164,6 +3368,39 @@ class App {
           out.push(x_est);
         }
         outputs['out'] = out;
+        break;
+      }
+      case 'dcoffset': {
+        const inp = this.getUpstreamData(node, 'in');
+        outputs['out'] = inp.length ? DSP.dcOffset(inp) : [];
+        break;
+      }
+      case 'differentiator': {
+        const inp = this.getUpstreamData(node, 'in');
+        outputs['out'] = inp.length ? DSP.differentiator(inp) : [];
+        break;
+      }
+      case 'stdwin': {
+        const inp = this.getUpstreamData(node, 'in');
+        const size = Math.max(2, Math.floor(node.params.size || 16));
+        outputs['out'] = inp.length ? DSP.slidingStdDev(inp, size) : [];
+        break;
+      }
+      case 'interval2bpm': {
+        const inp = this.getUpstreamData(node, 'in');
+        outputs['out'] = inp.length ? DSP.intervalToBpm(inp, this.sampleRate) : [];
+        break;
+      }
+      case 'peakdetector': {
+        const signal = this.getUpstreamData(node, 'in');
+        const trigger = this.getUpstreamData(node, 'in2');
+        const outNames = ['out','out2','out3','out4','out5','out6','out7','out8','out9','out10'];
+        if (signal.length) {
+          const result = DSP.peakValleyDetector(signal, trigger);
+          for (const name of outNames) outputs[name] = result[name];
+        } else {
+          for (const name of outNames) outputs[name] = [];
+        }
         break;
       }
       case 'medianwin': {
