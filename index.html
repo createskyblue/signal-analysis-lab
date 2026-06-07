@@ -2026,6 +2026,11 @@ class App {
               // Store for cleanup / external value sync
               if (!this._cmViews) this._cmViews = new Map();
               this._cmViews.set(node.id + ':' + p.id, view);
+              // CM may have changed node height — refresh ports & connections
+              requestAnimationFrame(() => {
+                this.updatePortPositions(node);
+                this.renderConnections();
+              });
             } else {
               ta.style.display = ''; // fallback
             }
