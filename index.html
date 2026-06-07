@@ -1360,6 +1360,13 @@ class App {
         this.run();
         return;
       }
+      // Ctrl+S export project
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.exportProject();
+        return;
+      }
       const inInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
       // Delete selected node
       if (e.key === 'Delete' && this.selectedNodes.size > 0 && !inInput) {
