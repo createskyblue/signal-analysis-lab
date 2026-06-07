@@ -1353,27 +1353,27 @@ class App {
     });
 
     // Capture-phase handler: global shortcuts that override browser defaults
-    document.addEventListener('keydown', (e) => {
+    window.addEventListener('keydown', function(e) {
       // F5 to run
-      if (e.key === 'F5') {
+      if (e.key === 'F5' || e.code === 'F5') {
         e.preventDefault();
         e.stopPropagation();
-        this.run();
+        app.run();
         return;
       }
       // Ctrl+S export project
-      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.code === 'KeyS')) {
+      if (e.code === 'KeyS' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         e.stopPropagation();
-        this.exportProject();
+        app.exportProject();
         return;
       }
       // Ctrl+A select all nodes
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A' || e.code === 'KeyA')) {
+      if (e.code === 'KeyA' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         e.stopPropagation();
-        document.activeElement?.blur();
-        this.selectNodes(this.nodes.map(n => n.id));
+        e.stopImmediatePropagation();
+        app.selectNodes(app.nodes.map(function(n) { return n.id; }));
         return;
       }
     }, true); // capture phase — fires before the target input sees the event
