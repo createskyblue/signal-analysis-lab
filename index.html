@@ -35,13 +35,13 @@ html, body { width: 100%; height: 100%; overflow: hidden; user-select: none; -we
 /* ========== Toolbar (removed - using sidebar) ========== */
 
 /* ========== Viewport ========== */
-.viewport { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: visible; z-index: 1; }
+.viewport { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: visible; z-index: 3; pointer-events: none; }
 
 /* ========== Canvas Grid ========== */
 .grid-canvas { position: absolute; top: 0; left: 0; pointer-events: none; background-color: #1e1e1e; z-index: 1; }
 
 /* ========== SVG Connections ========== */
-.connections-svg { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 5; overflow: hidden; }
+.connections-svg { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 2; overflow: hidden; }
 .connections-svg .conn-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
 .connections-svg .conn-line { fill: none; stroke: var(--vscode-accent-soft); stroke-width: 2.5; pointer-events: none; transition: stroke 0.15s, stroke-width 0.15s; }
 .connections-svg .conn-group:hover .conn-line { stroke: var(--vscode-accent); stroke-width: 3.5; }
@@ -242,7 +242,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; user-select: none; -we
       <div class="sidebar-item" onclick="app.addNode('lowpass')"><span class="dot" style="background:#a569bd"></span>低通滤波</div>
       <div class="sidebar-item" onclick="app.addNode('highpass')"><span class="dot" style="background:#bb8fce"></span>高通滤波</div>
       <div class="sidebar-item" onclick="app.addNode('bandpass')"><span class="dot" style="background:#8e44ad"></span>带通滤波</div>
-      <div class="sidebar-item" onclick="app.addNode('weighted')"><span class="dot" style="background:#7d3c98"></span>一阶 IIR 平滑</div>
+      <div class="sidebar-item" onclick="app.addNode('weighted')"><span class="dot" style="background:#7d3c98"></span>指数平均滤波</div>
       <div class="sidebar-item" onclick="app.addNode('firlinear')"><span class="dot" style="background:#5dade2"></span>FIR 线性相位</div>
       <div class="sidebar-item" onclick="app.addNode('madfilter')"><span class="dot" style="background:#ce9178"></span>Hampel滤波</div>
       <div class="sidebar-item" onclick="app.addNode('kalman')"><span class="dot" style="background:#2980b9"></span>卡尔曼滤波</div>
@@ -346,34 +346,42 @@ html, body { width: 100%; height: 100%; overflow: hidden; user-select: none; -we
 //  DSP - Signal Processing Utilities
 // ============================================================
 const DSP = {
-  lowpass(signal, cutoff, sampleRate) {
+  lowpass(signal, cutoff, sampleRate, order = 2) {
     if (!signal.length) return [];
-    const rc = 1.0 / (cutoff * 2 * Math.PI);
-    const dt = 1.0 / sampleRate;
-    const alpha = dt / (rc + dt);
-    const out = [signal[0]];
-    for (let i = 1; i < signal.length; i++) {
-      out.push(out[i - 1] + alpha * (signal[i] - out[i - 1]));
+    let result = signal;
+    for (let stage = 0; stage < order; stage++) {
+      const rc = 1.0 / (cutoff * 2 * Math.PI);
+      const dt = 1.0 / sampleRate;
+      const alpha = dt / (rc + dt);
+      const out = [result[0]];
+      for (let i = 1; i < result.length; i++) {
+        out.push(out[i - 1] + alpha * (result[i] - out[i - 1]));
+      }
+      result = out;
     }
-    return out;
+    return result;
   },
 
-  highpass(signal, cutoff, sampleRate) {
+  highpass(signal, cutoff, sampleRate, order = 2) {
     if (!signal.length) return [];
-    const rc = 1.0 / (cutoff * 2 * Math.PI);
-    const dt = 1.0 / sampleRate;
-    const alpha = rc / (rc + dt);
-    const out = [0];
-    for (let i = 1; i < signal.length; i++) {
-      out.push(alpha * (out[i - 1] + signal[i] - signal[i - 1]));
+    let result = signal;
+    for (let stage = 0; stage < order; stage++) {
+      const rc = 1.0 / (cutoff * 2 * Math.PI);
+      const dt = 1.0 / sampleRate;
+      const alpha = rc / (rc + dt);
+      const out = [0];
+      for (let i = 1; i < result.length; i++) {
+        out.push(alpha * (out[i - 1] + result[i] - result[i - 1]));
+      }
+      result = out;
     }
-    return out;
+    return result;
   },
 
-  bandpass(signal, lowCut, highCut, sampleRate) {
+  bandpass(signal, lowCut, highCut, sampleRate, order = 2) {
     if (!signal.length) return [];
-    const low = DSP.lowpass(signal, highCut, sampleRate);
-    return DSP.highpass(low, lowCut, sampleRate);
+    const low = DSP.lowpass(signal, highCut, sampleRate, order);
+    return DSP.highpass(low, lowCut, sampleRate, order);
   },
 
   weighted(signal, weight) {
@@ -658,7 +666,9 @@ const NODE_DEFS = {
     inputs: [{ id: 'in', label: '输入' }],
     outputs: [{ id: 'out', label: '输出' }],
     params: [
-      { id: 'cutoff', label: '截止频率 (Hz)', type: 'number', default: 50 }
+      { id: 'cutoff', label: '截止频率 (Hz)', type: 'number', default: 50 },
+      { id: 'order', label: '阶数 (1~8)', type: 'number', default: 2, min: 1 },
+      { id: '_info', label: '', type: 'info', default: '衰减 ＞截止频率 的信号。阶数越高衰减越陡（每阶 6dB/oct）。阶数升高会略降低有效截止频率。' }
     ]
   },
   highpass: {
@@ -666,7 +676,9 @@ const NODE_DEFS = {
     inputs: [{ id: 'in', label: '输入' }],
     outputs: [{ id: 'out', label: '输出' }],
     params: [
-      { id: 'cutoff', label: '截止频率 (Hz)', type: 'number', default: 50 }
+      { id: 'cutoff', label: '截止频率 (Hz)', type: 'number', default: 50 },
+      { id: 'order', label: '阶数 (1~8)', type: 'number', default: 2, min: 1 },
+      { id: '_info', label: '', type: 'info', default: '衰减 ＜截止频率 的信号。阶数越高衰减越陡（每阶 6dB/oct）。' }
     ]
   },
   bandpass: {
@@ -675,15 +687,18 @@ const NODE_DEFS = {
     outputs: [{ id: 'out', label: '输出' }],
     params: [
       { id: 'lowcut', label: '低截止 (Hz)', type: 'number', default: 30 },
-      { id: 'highcut', label: '高截止 (Hz)', type: 'number', default: 100 }
+      { id: 'highcut', label: '高截止 (Hz)', type: 'number', default: 100 },
+      { id: 'order', label: '阶数 (1~8)', type: 'number', default: 2, min: 1 },
+      { id: '_info', label: '', type: 'info', default: '只保留低截止～高截止之间的频率。阶数越高边缘越陡。⚠️ 两截止频率应相差 2~3 倍以上，靠太近信号严重衰减。' }
     ]
   },
   weighted: {
-    type: 'weighted', title: '一阶 IIR 平滑',
+    type: 'weighted', title: '指数平均滤波器',
     inputs: [{ id: 'in', label: '输入' }],
     outputs: [{ id: 'out', label: '输出' }],
     params: [
-      { id: 'weight', label: '反馈系数 w (0~1)', type: 'number', default: 0.9 }
+      { id: 'alpha', label: '平滑系数 α (0~1)', type: 'number', default: 0.1 },
+      { id: '_info', label: '', type: 'info', default: 'y[i] = α·x[i] + (1-α)·y[i-1] （EMA / 一阶 IIR）' }
     ]
   },
   firlinear: {
@@ -1531,6 +1546,7 @@ class App {
   applyLegacyParamMigration(node, savedParams = {}) {
     if (node.type === 'normalizer' && savedParams.global === false && node.params.mode === '全部') node.params.mode = '窗口';
     if (node.type === 'probe' && savedParams.visible !== undefined && savedParams.enabled === undefined) node.params.enabled = savedParams.visible !== false;
+    if (node.type === 'weighted' && savedParams.weight !== undefined && savedParams.alpha === undefined) node.params.alpha = 1 - savedParams.weight;
   }
 
   getMultiplexerPortCount(node) {
@@ -1810,7 +1826,7 @@ class App {
         this.renderParamSelect(body, node, p);
       } else if (p.type === 'info') {
         const div = document.createElement('div');
-        div.style.cssText = 'font-size:10px;color:#888;font-family:Consolas,monospace;padding:2px 0;white-space:nowrap;';
+        div.style.cssText = 'font-size:10px;color:#888;padding:2px 0 6px;line-height:1.5;';
         div.textContent = p.default;
         body.appendChild(div);
       } else {
@@ -2788,23 +2804,34 @@ class App {
 
       case 'lowpass': {
         const inp = this.getUpstreamData(node, 'in');
-        outputs['out'] = inp.length ? DSP.lowpass(inp, node.params.cutoff || 50, this.sampleRate) : [];
+        const order = Math.max(1, Math.min(8, Math.floor(node.params.order || 2)));
+        outputs['out'] = inp.length ? DSP.lowpass(inp, node.params.cutoff || 50, this.sampleRate, order) : [];
         break;
       }
       case 'highpass': {
         const inp = this.getUpstreamData(node, 'in');
-        outputs['out'] = inp.length ? DSP.highpass(inp, node.params.cutoff || 50, this.sampleRate) : [];
+        const order = Math.max(1, Math.min(8, Math.floor(node.params.order || 2)));
+        outputs['out'] = inp.length ? DSP.highpass(inp, node.params.cutoff || 50, this.sampleRate, order) : [];
         break;
       }
       case 'bandpass': {
         const inp = this.getUpstreamData(node, 'in');
-        outputs['out'] = inp.length ? DSP.bandpass(inp, node.params.lowcut || 30, node.params.highcut || 100, this.sampleRate) : [];
+        const order = Math.max(1, Math.min(8, Math.floor(node.params.order || 2)));
+        outputs['out'] = inp.length ? DSP.bandpass(inp, node.params.lowcut || 30, node.params.highcut || 100, this.sampleRate, order) : [];
         break;
       }
       case 'weighted': {
         const inp = this.getUpstreamData(node, 'in');
-        const w = node.params.weight !== undefined ? node.params.weight : 0.9;
-        outputs['out'] = inp.length ? DSP.weighted(inp, w) : [];
+        const alpha = node.params.alpha !== undefined ? node.params.alpha : 0.1;
+        const a = Math.max(0, Math.min(1, alpha));
+        const out = [];
+        if (inp.length) {
+          out.push(inp[0]);
+          for (let i = 1; i < inp.length; i++) {
+            out.push(a * inp[i] + (1 - a) * out[i - 1]);
+          }
+        }
+        outputs['out'] = out;
         break;
       }
       case 'firlinear': {
