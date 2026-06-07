@@ -54,6 +54,10 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .node:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.45); border-color: #4b4b4b; }
 .node.selected { box-shadow: 0 0 0 2px var(--vscode-accent), 0 6px 16px rgba(0,0,0,0.45); }
 .selection-box { position: absolute; display: none; border: 1px solid var(--vscode-accent); background: rgba(0,122,204,0.18); pointer-events: none; z-index: 60; }
+.canvas-focus-crosshair { position: absolute; inset: 0; pointer-events: none; z-index: 80; opacity: 0; transition: opacity 0.08s linear; }
+.canvas-focus-crosshair.active { opacity: 1; }
+.canvas-focus-crosshair-h { position: absolute; left: 0; right: 0; height: 1px; top: var(--crosshair-y, 50%); background: var(--vscode-warning); box-shadow: 0 0 10px rgba(204,167,0,0.85); }
+.canvas-focus-crosshair-v { position: absolute; top: 0; bottom: 0; width: 1px; left: var(--crosshair-x, 50%); background: var(--vscode-warning); box-shadow: 0 0 10px rgba(204,167,0,0.85); }
 .node-header { padding: 8px 12px; border-radius: 3px 5px 0 0; cursor: move; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; background: var(--vscode-tab); color: var(--vscode-text); border-bottom: 1px solid var(--vscode-border); }
 .node-body { padding: 10px 12px; background: var(--vscode-side); border-radius: 0 0 5px 3px; }
 .node-body label { font-size: 11px; color: var(--vscode-muted); display: block; margin-bottom: 3px; }
@@ -306,6 +310,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
       <canvas class="grid-canvas" id="gridCanvas"></canvas>
       <svg class="connections-svg" id="connectionsSvg"></svg>
     </div>
+    <div class="canvas-focus-crosshair" id="canvasFocusCrosshair" aria-hidden="true"><div class="canvas-focus-crosshair-h"></div><div class="canvas-focus-crosshair-v"></div></div>
     <div class="empty-hint" id="emptyHint">从左侧栏拖拽节点到画布<br>从输出端口 (右侧圆点) 拖拽到输入端口 (左侧圆点) 连线<br>画布空白处左键拖拽框选，拖动已选节点可整体移动<br>点击连线变红后再点删除 / 右键直接删除<br>按 Delete 键删除选中节点 / F5 运行<br>鼠标中键拖拽平移视图 / 空格键复位<br><br>点击左下角「演示数据」可快速体验</div>
   </div>
   <div class="divider" id="divider"></div>
@@ -980,7 +985,7 @@ const NODE_DEFS = {
     params: [
       { id: 'name', label: '示波器名称', type: 'text', default: '' },
       { id: 'color', label: '颜色', type: 'color', default: '' },
-      { id: 'visible', label: '显示波形', type: 'checkbox', default: true }
+      { id: 'enabled', label: '启用', type: 'checkbox', default: true }
     ]
   },
   csvoutput: {
@@ -1012,6 +1017,7 @@ class App {
     this.gridCtx = this.gridCanvas.getContext('2d');
     this.svg = document.getElementById('connectionsSvg');
     this.viewport = document.getElementById('viewport');
+    this.canvasFocusCrosshair = document.getElementById('canvasFocusCrosshair');
     this.chartScroll = document.getElementById('chartScroll');
     this.chartScrollbar = document.getElementById('chartScrollbar');
     this.chartScrollbarThumb = document.getElementById('chartScrollbarThumb');
@@ -1469,6 +1475,7 @@ class App {
 
   applyLegacyParamMigration(node, savedParams = {}) {
     if (node.type === 'normalizer' && savedParams.global === false && node.params.mode === '全部') node.params.mode = '窗口';
+    if (node.type === 'probe' && savedParams.visible !== undefined && savedParams.enabled === undefined) node.params.enabled = savedParams.visible !== false;
   }
 
   getMultiplexerPortCount(node) {
@@ -3152,10 +3159,11 @@ class App {
         const inp = this.getUpstreamData(node, 'in');
         outputs['out'] = [...inp];
         if (this.isInputBlocked(node, 'in')) break;
+        const enabled = node.params.enabled !== false;
+        if (!enabled) break;
         const name = node.params.name || `示波器 #${node.id}`;
         const color = node.params.color || this.randomColor();
-        const visible = node.params.visible !== false;
-        this.probeData.set(node.id, { title: name, data: inp, color, nodeId: node.id, axis: this.getSignalAxis(inp), visible });
+        this.probeData.set(node.id, { title: name, data: inp, color, nodeId: node.id, axis: this.getSignalAxis(inp) });
         break;
       }
     }
@@ -3299,7 +3307,7 @@ class App {
     }
     for (const probe of orderedProbes) {
       if (probe.data.length > 0) {
-        this.addChartItem(container, probe.title, probe.data, probe.color, probe.nodeId, probe.axis, probe.visible);
+        this.addChartItem(container, probe.title, probe.data, probe.color, probe.nodeId, probe.axis);
       }
     }
 
@@ -3348,8 +3356,6 @@ class App {
     chartItem.readout.style.display = visible ? '' : 'none';
     chartItem.toggle.textContent = visible ? '隐藏' : '显示';
     chartItem.toggle.title = visible ? '隐藏波形' : '显示波形';
-    const node = chartItem.nodeId !== null ? this.nodes.find(n => n.id === chartItem.nodeId) : null;
-    if (node && node.type === 'probe') node.params.visible = visible;
     this.updateChartScrollbar();
     this.redrawCharts();
     this.scheduleSave();
@@ -3453,7 +3459,22 @@ class App {
     this.panOffset.y = cy - (node.y + 60) * this.canvasZoom;
     this.applyViewportTransform();
     this.selectNode(node.id);
+    this.showCanvasCrosshair(node);
     this.scheduleSave();
+  }
+
+  showCanvasCrosshair(node) {
+    if (!node || !node.el || !this.canvasFocusCrosshair) return;
+    const centerX = (node.x + node.el.offsetWidth / 2) * this.canvasZoom + this.panOffset.x;
+    const centerY = (node.y + node.el.offsetHeight / 2) * this.canvasZoom + this.panOffset.y;
+    this.canvasFocusCrosshair.style.setProperty('--crosshair-x', `${centerX}px`);
+    this.canvasFocusCrosshair.style.setProperty('--crosshair-y', `${centerY}px`);
+    clearTimeout(this._canvasCrosshairTimer);
+    this.canvasFocusCrosshair.classList.add('active');
+    this._canvasCrosshairTimer = setTimeout(() => {
+      this.canvasFocusCrosshair.classList.remove('active');
+      this._canvasCrosshairTimer = null;
+    }, 500);
   }
 
   initChartScrollbar() {
