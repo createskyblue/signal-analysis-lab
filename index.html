@@ -3778,22 +3778,7 @@ class App {
       this.updateRunProgress(totalNodes, totalNodes, '生成图表');
       await this.nextFrame();
 
-      const connectedInputNodes = inputNodes.filter(n => this.isInputSignalVisible(n));
-
-      const inputSignals = [];
-      for (const [index, node] of connectedInputNodes.entries()) {
-        const cached = this.nodeCache.get(node.id);
-        if (cached && cached.out) {
-          inputSignals.push({
-            title: this.getInputChartTitle(node),
-            data: cached.out,
-            color: this.getInputChartColor(index),
-            nodeId: node.id
-          });
-        }
-      }
-
-      this.renderChart(inputSignals);
+      this.renderChart([]);
       this.toast('运行完成', 'success');
     } finally {
       this._isRunning = false;
