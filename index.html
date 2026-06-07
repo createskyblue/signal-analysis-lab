@@ -113,9 +113,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; user-select: none; -we
 .node-custom .node-body { display: flex; flex-direction: column; position: relative; flex: 1; overflow: hidden; }
 .node-custom .node-body label { flex-shrink: 0; }
 .node-custom .node-body textarea { flex: 1; min-height: 40px; resize: none; }
-.node-custom .node-body .cm-wrap { flex: 1; min-height: 80px; max-height: 280px; border: 1px solid var(--vscode-input); border-radius: 3px; overflow: hidden; }
-.node-custom .node-body .cm-wrap .cm-editor { height: 100%; }
-.node-custom .node-body .cm-wrap .cm-editor .cm-scroller { font-family: 'Consolas', 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; line-height: 1.6; overflow: auto !important; }
+.node-custom .node-body .cm-wrap { flex: 1; min-height: 80px; border: 1px solid var(--vscode-input); border-radius: 3px; }
+.node-custom .node-body .cm-wrap .cm-editor .cm-scroller { font-family: 'Consolas', 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; line-height: 1.6; }
 .node-custom .node-body .cm-wrap .cm-editor.cm-focused { outline: none; }
 .node-custom .resize-handle { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; z-index: 10; }
 .node-custom .resize-handle::after { content: ''; position: absolute; right: 3px; bottom: 3px; width: 8px; height: 8px; border-right: 2px solid #555; border-bottom: 2px solid #555; }
@@ -1520,7 +1519,7 @@ class App {
     // Mouse wheel zoom on canvas - zoom entire viewport
     this.canvasPanel.addEventListener('wheel', (e) => {
       if (e.target.closest('.sidebar') || e.target.closest('.chart-panel')) return;
-      if (e.target.closest('.node-body textarea, .node-body input, .node-body select, .param-select')) return;
+      if (e.target.closest('.node-body textarea, .node-body input, .node-body select, .param-select, .cm-editor, .cm-wrap')) return;
       e.preventDefault();
       const rect = this.canvasPanel.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
@@ -3695,6 +3694,10 @@ class App {
           cm.basicSetup,
           cm.javascript(),
           cm.oneDark,
+          cm.EditorView.theme({
+            '&': { maxHeight: '280px' },
+            '.cm-scroller': { overflow: 'auto' }
+          }),
           cm.EditorView.updateListener.of(update => {
             if (update.docChanged) {
               node.params[paramId] = view.state.doc.toString();
