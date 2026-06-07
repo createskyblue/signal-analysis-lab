@@ -3769,23 +3769,45 @@ class App {
       ctx.setLineDash([]);
     }
 
-    // Waveform
+    // Waveform with min-max downsampling
+    const pointsPerPixel = (iEnd - iStart) / dw;
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.5;
     ctx.lineJoin = 'round';
-    ctx.beginPath();
-    for (let px = 0; px < dw; px++) {
-      const ratio = px / dw;
-      const dataIdx = iStart + ratio * (iEnd - iStart);
-      const idx = Math.max(iStart, Math.min(iEnd - 1, Math.floor(dataIdx)));
-      const frac = dataIdx - idx;
-      const v0 = data[idx] ?? 0;
-      const v1 = data[idx + 1] ?? v0;
-      const v = v0 + frac * (v1 - v0);
-      const y = dh - pad - ((v - min) / range) * (dh - 2 * pad);
-      if (px === 0) ctx.moveTo(px, y); else ctx.lineTo(px, y);
+
+    if (pointsPerPixel <= 1) {
+      // Fewer data points than pixels — interpolate exactly
+      ctx.beginPath();
+      for (let px = 0; px < dw; px++) {
+        const ratio = px / dw;
+        const dataIdx = iStart + ratio * (iEnd - iStart);
+        const idx = Math.max(iStart, Math.min(iEnd - 1, Math.floor(dataIdx)));
+        const frac = dataIdx - idx;
+        const v0 = data[idx] ?? 0;
+        const v1 = data[idx + 1] ?? v0;
+        const v = v0 + frac * (v1 - v0);
+        const y = dh - pad - ((v - min) / range) * (dh - 2 * pad);
+        if (px === 0) ctx.moveTo(px, y); else ctx.lineTo(px, y);
+      }
+      ctx.stroke();
+    } else {
+      // Many data points per pixel — draw min-max bars to preserve extrema
+      for (let px = 0; px < dw; px++) {
+        const chunkStart = Math.floor(iStart + (px / dw) * (iEnd - iStart));
+        const chunkEnd   = Math.floor(iStart + ((px + 1) / dw) * (iEnd - iStart));
+        let chunkMin = Infinity, chunkMax = -Infinity;
+        for (let j = chunkStart; j < chunkEnd; j++) {
+          const v = data[j];
+          if (v < chunkMin) chunkMin = v;
+          if (v > chunkMax) chunkMax = v;
+        }
+        if (chunkMin === Infinity) continue;
+        const yMin = dh - pad - ((chunkMax - min) / range) * (dh - 2 * pad);
+        const yMax = dh - pad - ((chunkMin - min) / range) * (dh - 2 * pad);
+        ctx.fillStyle = color;
+        ctx.fillRect(px, yMin, 1, Math.max(1, yMax - yMin));
+      }
     }
-    ctx.stroke();
 
     // Labels
     ctx.fillStyle = '#666';
