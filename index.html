@@ -3791,10 +3791,12 @@ class App {
       }
       ctx.stroke();
     } else {
-      // Many data points per pixel — draw min-max bars to preserve extrema
+      // Many data points per pixel — draw min-max bars with 1-sample overlap
       for (let px = 0; px < dw; px++) {
-        const chunkStart = Math.floor(iStart + (px / dw) * (iEnd - iStart));
-        const chunkEnd   = Math.floor(iStart + ((px + 1) / dw) * (iEnd - iStart));
+        const chunkStart = px === 0
+          ? Math.floor(iStart + (px / dw) * (iEnd - iStart))
+          : Math.floor(iStart + (px / dw) * (iEnd - iStart)) - 1;
+        const chunkEnd = Math.floor(iStart + ((px + 1) / dw) * (iEnd - iStart));
         let chunkMin = Infinity, chunkMax = -Infinity;
         for (let j = chunkStart; j < chunkEnd; j++) {
           const v = data[j];
