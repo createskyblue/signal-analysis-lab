@@ -1198,7 +1198,7 @@ const NODE_DEFS = {
       { id: 'showBandIntervalSH', label: '峰谷间隔 S&H 输出', type: 'checkbox', default: true, affectsPorts: true },
       { id: 'showBandIntervalCompact', label: '峰谷间隔 紧凑 输出', type: 'checkbox', default: true, affectsPorts: true },
       { id: 'showTrigInterval', label: '触发间隔输出 (out7~10)', type: 'checkbox', default: false, affectsPorts: true },
-      { id: '_info', label: '', type: 'info', default: '配合迟滞比较器使用。in=带通信号, in2=迟滞触发(0/1)。触发边沿切分段，段内寻极值。' }
+      { id: '_info', label: '', type: 'info', default: '信号(in)：待分析的连续波形，通常是带通滤波后的信号。\n触发(in2)：0/1 方波，通常来自迟滞比较器。每次跳变(0→1 或 1→0)标记一个分段边界，在此分段内找到信号的最大/最小值作为峰/谷。\n典型接法：带通滤波 → 迟滞比较器 → 本节点(in2)，同时带通输出也接到本节点(in)。' }
     ]
   }
 };
@@ -2030,7 +2030,7 @@ class App {
         this.renderParamSelect(body, node, p);
       } else if (p.type === 'info') {
         const div = document.createElement('div');
-        div.style.cssText = 'font-size:10px;color:#888;padding:2px 0 6px;line-height:1.5;';
+        div.style.cssText = 'font-size:10px;color:#888;padding:4px 0 6px;line-height:1.6;white-space:pre-line;';
         div.textContent = p.default;
         body.appendChild(div);
       } else {
