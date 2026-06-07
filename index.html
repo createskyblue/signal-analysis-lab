@@ -1956,7 +1956,7 @@ class App {
     header.className = 'node-header';
     const title = document.createElement('span');
     title.className = 'node-title';
-    title.textContent = this.getNodeTitle(node);
+    title.innerHTML = this.getNodeTitle(node).replace(/ (#\d+)$/, ' <span style="opacity:0.55;font-weight:400;font-size:10px">$1</span>');
     header.appendChild(title);
     el.appendChild(header);
 
@@ -2496,16 +2496,17 @@ class App {
   }
 
   getNodeTitle(node) {
-    if (node.type === 'input' && node.params.note) return `${node.def.title} - ${node.params.note}`;
-    if (node.type === 'csvoutput' && node.params.name) return `${node.def.title} - ${node.params.name}`;
-    if (node.type === 'custom' && node.params.name) return node.params.name;
-    return node.def.title;
+    const id = `#${node.id}`;
+    if (node.type === 'input' && node.params.note) return `${node.def.title} - ${node.params.note} ${id}`;
+    if (node.type === 'csvoutput' && node.params.name) return `${node.def.title} - ${node.params.name} ${id}`;
+    if (node.type === 'custom' && node.params.name) return `${node.params.name} ${id}`;
+    return `${node.def.title} ${id}`;
   }
 
   updateNodeTitle(node) {
     if (!node.el) return;
     const title = node.el.querySelector('.node-title');
-    if (title) title.textContent = this.getNodeTitle(node);
+    if (title) title.innerHTML = this.getNodeTitle(node).replace(/ (#\d+)$/, ' <span style="opacity:0.55;font-weight:400;font-size:10px">$1</span>');
   }
 
   updatePortPositions(node) {
@@ -3769,7 +3770,7 @@ class App {
       const totalNodes = Math.max(1, this.nodes.length);
       for (const [index, node] of this.nodes.entries()) {
         const isCustom = node.type === 'custom';
-        this.updateRunProgress(index, totalNodes, isCustom ? `等待 ${node.def.title}` : `正在运行 ${node.def.title}`);
+        this.updateRunProgress(index, totalNodes, isCustom ? `等待 ${this.getNodeTitle(node)}` : `正在运行 ${this.getNodeTitle(node)}`);
         await this.nextFrame();
         await this.executeNode(node, runOptions);
         if (cancelSignal.aborted) break;
