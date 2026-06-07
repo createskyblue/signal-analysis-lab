@@ -66,6 +66,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; user-select: none; -we
 .node-body select option { background: var(--vscode-input-bg); color: var(--vscode-text); }
 .node-body textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--vscode-input); border-radius: 3px; background: var(--vscode-input-bg); color: var(--vscode-text); font-size: 11px; font-family: 'Consolas', monospace; resize: vertical; min-height: 60px; margin-bottom: 6px; user-select: text; -webkit-user-select: text; }
 .node-body input:focus, .node-body textarea:focus, .node-body select:focus { outline: none; border-color: var(--vscode-accent); }
+.node-body strong { color: #ccc; }
 .param-select { position: relative; width: 100%; margin-bottom: 6px; }
 .param-select-button { width: 100%; padding: 4px 24px 4px 8px; border: 1px solid var(--vscode-input); border-radius: 3px; background: var(--vscode-input-bg); color: var(--vscode-text); font-size: 12px; text-align: left; cursor: pointer; position: relative; }
 .param-select-button::after { content: ''; position: absolute; right: 9px; top: 50%; width: 6px; height: 6px; border-right: 1px solid var(--vscode-muted); border-bottom: 1px solid var(--vscode-muted); transform: translateY(-65%) rotate(45deg); pointer-events: none; }
@@ -842,7 +843,7 @@ const NODE_DEFS = {
     params: [
       { id: 'cutoff', label: '截止频率 (Hz)', type: 'number', default: 50 },
       { id: 'taps', label: '抽头数量 (奇数)', type: 'number', default: 31 },
-      { id: '_info', label: '', type: 'info', default: 'Hamming 窗 sinc 低通 FIR。抽头数越大衰减越陡但计算量也越大。\n与 RC 滤波器不同：FIR 是线性相位（各频率延迟一致），适合对波形形状有要求的场景。' }
+      { id: '_info', label: '', type: 'info', default: 'Hamming 窗 sinc 低通 FIR。抽头数越大衰减越陡但计算量也越大。\n<strong>与 RC 滤波器不同：</strong>FIR 是线性相位（各频率延迟一致），适合对波形形状有要求的场景。' }
     ]
   },
   madfilter: {
@@ -856,7 +857,7 @@ const NODE_DEFS = {
       { id: 'size', label: '窗口大小', type: 'number', default: 7 },
       { id: 'threshold', label: '阈值倍数', type: 'number', default: 3 },
       { id: 'scale', label: 'MAD 缩放系数', type: 'number', default: 1.4826 },
-      { id: '_info', label: '', type: 'info', default: '对每个采样点，取窗口内中位数 med 和中位绝对偏差 MAD。若 |x-med| > 阈值×scale×MAD，则替换为中位数。\n阈值=0 时退化为纯中值滤波。scale=1.4826 使 MAD≈标准差（正态假设）。\n输出 out=滤波结果, mad=局部 MAD 轨迹（用于调参）。' }
+      { id: '_info', label: '', type: 'info', default: '对每个采样点，取窗口内中位数 med 和中位绝对偏差 MAD。若 |x-med| > 阈值×scale×MAD，则替换为中位数。\n<strong>阈值=0 时</strong>退化为纯中值滤波。scale=1.4826 使 MAD≈标准差（正态假设）。\n<strong>输出</strong> out=滤波结果, mad=局部 MAD 轨迹（用于调参）。' }
     ]
   },
   fft: {
@@ -867,7 +868,7 @@ const NODE_DEFS = {
       { id: 'size', label: 'FFT 点数', type: 'number', default: 1024 },
       { id: 'minFreq', label: '最小频率 (Hz)', type: 'number', default: '', optional: true, min: 0 },
       { id: 'maxFreq', label: '最大频率 (Hz)', type: 'number', default: '', optional: true, min: 0 },
-      { id: '_info', label: '', type: 'info', default: '计算输入信号的单边幅值谱（FFT 取模）。点数越大频率分辨力越高（Δf=采样率/点数）。\n最小/最大频率留空时默认显示 0~采样率/2。输出 X 轴单位为 Hz。' }
+      { id: '_info', label: '', type: 'info', default: '计算输入信号的单边幅值谱（FFT 取模）。点数越大频率分辨力越高（Δf=采样率/点数）。\n<strong>频率范围：</strong>最小/最大频率留空时默认显示 0~采样率/2。输出 X 轴单位为 Hz。' }
     ]
   },
   custom: {
@@ -917,7 +918,7 @@ const NODE_DEFS = {
       { id: 'count', label: '端口数量', type: 'number', default: 2, affectsPorts: true },
       { id: 'mode', label: '方向', type: 'select', options: ['多入一出', '一入多出'], default: '多入一出', affectsPorts: true },
       { id: 'routes', label: '启用通道', type: 'routeChecks', default: {} },
-      { id: '_info', label: '', type: 'info', default: '\"多入一出\"：从多路输入中选一路输出。\"一入多出\"：一路输入复制到多路输出（可启用/禁用各通道）。\n用\"上一个/下一个\"按钮切换选中的通道。只显示已启用的通道。' }
+      { id: '_info', label: '', type: 'info', default: '<strong>\"多入一出\"：</strong>从多路输入中选一路输出。<strong>\"一入多出\"：</strong>一路输入复制到多路输出（可启用/禁用各通道）。\n用\"上一个/下一个\"按钮切换选中的通道。只显示已启用的通道。' }
     ]
   },
   weightedmixer: {
@@ -1064,7 +1065,7 @@ const NODE_DEFS = {
     params: [
       { id: 'window', label: '窗口大小', type: 'number', default: 32 },
       { id: 'bins', label: '分桶数量', type: 'number', default: 16 },
-      { id: '_info', label: '', type: 'info', default: '在因果窗口内将信号幅值等距分桶，计算 Shannon 信息熵（单位 bit）。\n熵高→幅值分布均匀（噪声/复杂信号）；熵低→幅值集中在少数区间（规律信号如正弦波）。\n分桶越多分辨力越强但噪声敏感度也越高。' }
+      { id: '_info', label: '', type: 'info', default: '在因果窗口内将信号幅值等距分桶，计算 Shannon 信息熵（单位 bit）。\n<strong>熵高</strong>→幅值分布均匀（噪声/复杂信号）；<strong>熵低</strong>→幅值集中在少数区间（规律信号如正弦波）。\n<strong>分桶</strong>越多分辨力越强但噪声敏感度也越高。' }
     ]
   },
   squarewave: {
@@ -1081,7 +1082,7 @@ const NODE_DEFS = {
       { id: 'thresholdMode', label: '阈值模式', type: 'select', options: ['自动', '手动'], default: '自动' },
       { id: 'threshold', label: '手动阈值', type: 'number', default: 0, enabledWhen: { param: 'thresholdMode', value: '手动' } },
       { id: 'minEdges', label: '最少边沿数', type: 'number', default: 4 },
-      { id: '_info', label: '', type: 'info', default: '在因果窗口内检测阈值穿越边沿，提取完整周期（上升沿→下降沿→下一上升沿），计算周期/占空比/抖动，输出 0~1 规律度评分。\n规律度越接近 1 表示信号越像稳定矩形波。窗口至少包含 2 个完整周期才能有效检测。' }
+      { id: '_info', label: '', type: 'info', default: '在因果窗口内检测阈值穿越边沿，提取完整周期（上升沿→下降沿→下一上升沿），计算周期/占空比/抖动，输出 0~1 规律度评分。\n<strong>规律度</strong>越接近 1 表示信号越像稳定矩形波。<strong>窗口</strong>至少包含 2 个完整周期才能有效检测。' }
     ]
   },
   abs: {
@@ -1097,7 +1098,7 @@ const NODE_DEFS = {
     params: [
       { id: 'threshold', label: '阈值 (B未连接时)', type: 'number', default: 0.5 },
       { id: 'hyst', label: '迟滞 (0=禁用)', type: 'number', default: 0.1 },
-      { id: '_info', label: '', type: 'info', default: '将连续信号转为 0/1 方波。信号 > 阈值+Hyst → 输出 1；信号 < 阈值-Hyst → 输出 0；中间区域保持上一状态。\n迟滞越大抗噪越强，但会延迟翻转时刻。hyst=0 退化为普通过零比较器。\nB 端口未连接时使用参数\"阈值\"；连接后使用 B 端口的逐点值作为阈值。' }
+      { id: '_info', label: '', type: 'info', default: '将连续信号转为 0/1 方波。信号 > 阈值+Hyst → 输出 1；信号 < 阈值-Hyst → 输出 0；中间区域保持上一状态。\n<strong>迟滞</strong>越大抗噪越强，但会延迟翻转时刻。<strong>hyst=0</strong> 退化为普通过零比较器。\n<strong>B 端口</strong>未连接时使用参数\"阈值\"；连接后使用 B 端口的逐点值作为阈值。' }
     ]
   },
   kalman: {
@@ -1211,7 +1212,7 @@ const NODE_DEFS = {
       { id: 'showBandIntervalSH', label: '峰谷间隔 S&H 输出', type: 'checkbox', default: true, affectsPorts: true },
       { id: 'showBandIntervalCompact', label: '峰谷间隔 紧凑 输出', type: 'checkbox', default: true, affectsPorts: true },
       { id: 'showTrigInterval', label: '触发间隔输出 (out7~10)', type: 'checkbox', default: false, affectsPorts: true },
-      { id: '_info', label: '', type: 'info', default: '信号(in)：待分析的连续波形，通常是带通滤波后的信号。\n触发(in2)：0/1 方波，通常来自迟滞比较器。每次跳变(0→1 或 1→0)标记一个分段边界，在此分段内找到信号的最大/最小值作为峰/谷。\n典型接法：带通滤波 → 迟滞比较器 → 本节点(in2)，同时带通输出也接到本节点(in)。' }
+      { id: '_info', label: '', type: 'info', default: '<strong>信号(in)：</strong>待分析的连续波形，通常是带通滤波后的信号。\n<strong>触发(in2)：</strong>0/1 方波，通常来自迟滞比较器。每次跳变(0→1 或 1→0)标记一个分段边界，在此分段内找到信号的最大/最小值作为峰/谷。\n<strong>典型接法：</strong>带通滤波 → 迟滞比较器 → 本节点(in2)，同时带通输出也接到本节点(in)。' }
     ]
   }
 };
@@ -2047,7 +2048,7 @@ class App {
       } else if (p.type === 'info') {
         const div = document.createElement('div');
         div.style.cssText = 'font-size:10px;color:#888;padding:4px 0 6px;line-height:1.6;white-space:pre-line;word-break:break-all;overflow-wrap:break-word;max-width:220px;';
-        div.textContent = p.default;
+        div.innerHTML = p.default;
         body.appendChild(div);
       } else {
         const inp = document.createElement('input');
