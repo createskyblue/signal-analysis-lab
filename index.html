@@ -2043,7 +2043,7 @@ class App {
         this.renderParamSelect(body, node, p);
       } else if (p.type === 'info') {
         const div = document.createElement('div');
-        div.style.cssText = 'font-size:10px;color:#888;padding:4px 0 6px;line-height:1.6;white-space:pre-line;';
+        div.style.cssText = 'font-size:10px;color:#888;padding:4px 0 6px;line-height:1.6;white-space:pre-line;word-break:break-all;overflow-wrap:break-word;';
         div.textContent = p.default;
         body.appendChild(div);
       } else {
