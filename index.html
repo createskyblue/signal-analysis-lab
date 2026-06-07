@@ -113,6 +113,10 @@ html, body { width: 100%; height: 100%; overflow: hidden; user-select: none; -we
 .node-custom .node-body { display: flex; flex-direction: column; position: relative; flex: 1; overflow: hidden; }
 .node-custom .node-body label { flex-shrink: 0; }
 .node-custom .node-body textarea { flex: 1; min-height: 40px; resize: none; }
+.node-custom .node-body .cm-wrap { flex: 1; min-height: 80px; max-height: 280px; border: 1px solid var(--vscode-input); border-radius: 3px; overflow: hidden; }
+.node-custom .node-body .cm-wrap .cm-editor { height: 100%; }
+.node-custom .node-body .cm-wrap .cm-editor .cm-scroller { font-family: 'Consolas', 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; line-height: 1.6; overflow: auto !important; }
+.node-custom .node-body .cm-wrap .cm-editor.cm-focused { outline: none; }
 .node-custom .resize-handle { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; z-index: 10; }
 .node-custom .resize-handle::after { content: ''; position: absolute; right: 3px; bottom: 3px; width: 8px; height: 8px; border-right: 2px solid #555; border-bottom: 2px solid #555; }
 .node-note { --node-color: var(--vscode-warning); }
@@ -882,7 +886,40 @@ const NODE_DEFS = {
       { id: 'inputNames', label: '输入端口名称', type: 'portNames', direction: 'in', default: {} },
       { id: 'outputNames', label: '输出端口名称', type: 'portNames', direction: 'out', default: {} },
       { id: 'code', label: 'JS 算法', type: 'code',
-        default: '// signal: 第一个输入数组，兼容旧写法\n// sampleRate: 采样率\n// inputs: 所有输入端口，如 inputs.in、inputs.in2\n// 单输出可 return 数组；多输出可 return { out: 数组, out2: 数组 }\nreturn signal.map(v => Math.abs(v));' }
+        default: '// === 自定义节点 JS 脚本 ===\n' +
+'// 本代码运行在 async 函数体内，支持 await。\n' +
+'// 引擎会等待此函数返回后，再将结果推给下游节点。\n' +
+'//\n' +
+'// 可用变量（已注入，直接使用）：\n' +
+'//   signal   — number[]，第一个输入端口的数组（兼容旧写法）\n' +
+'//   inputs   — object，所有输入端口的数组，如 inputs.in、inputs.in2、inputs.in3\n' +
+'//   sampleRate — number，采样率（Hz）\n' +
+'//   sleep(ms) — async 函数，暂停 ms 毫秒；用户按 ESC 或 F5 会抛出 AbortError 打断等待\n' +
+'//   aborted() — 返回 boolean，用户是否已取消本次执行（可在循环中轮询）\n' +
+'//\n' +
+'// 返回值规范：\n' +
+'//   单输出端口 → return number[]   (如 return signal.map(v => Math.abs(v)))\n' +
+'//   多输出端口 → return { out: number[], out2: number[], out3: number[] }\n' +
+'//   ⚠ 不要 return Promise 对象，确保所有 await 在 return 之前完成。\n' +
+'//\n' +
+'// 示例1（同步滤波）：\n' +
+'//   return signal.map(v => v > 0 ? v : 0);  // 半波整流\n' +
+'//\n' +
+'// 示例2（WebSocket 实时采集，阻塞等待收够 N 点后解析）：\n' +
+'//   const ws = new WebSocket(\'ws://192.168.1.1:8080/stream\');\n' +
+'//   ws.binaryType = \'arraybuffer\';\n' +
+'//   const buf = [];\n' +
+'//   await new Promise((resolve, reject) => {\n' +
+'//     const timer = setTimeout(() => { ws.close(); reject(new Error(\'超时\')); }, 10000);\n' +
+'//     ws.onmessage = (e) => { buf.push(...new Float32Array(e.data)); if (buf.length >= 512) { clearTimeout(timer); ws.close(); resolve(); } };\n' +
+'//     ws.onerror = () => { clearTimeout(timer); reject(new Error(\'连接失败\')); };\n' +
+'//   });\n' +
+'//   // 协议解析：假设每 2 字节小端序组成一个 12 位 ADC 值\n' +
+'//   // return buf.map(v => (v - 2048) / 2048);\n' +
+'//   return buf;\n' +
+'//\n' +
+'return signal;' },
+      { id: '_info', label: '', type: 'info', default: '<strong>async/await 支持：</strong>代码运行在 async 函数中，可使用 await 等待异步操作（如 WebSocket 收数据）。引擎会等待函数返回后再推给下游节点。\n<strong>sleep(ms)：</strong>暂停 ms 毫秒，可被 ESC/F5 取消打断（抛出 AbortError）。\n<strong>aborted()：</strong>轮询用户是否取消了本次执行，可用于循环终止条件。\n<strong>返回值：</strong>单输出 return 数组；多输出 return { out: 数组, out2: 数组 }。不要 return Promise 对象。\n<strong>调试：</strong>用 console.log 输出到浏览器开发者工具（F12）。' }
     ]
   },
   note: {
@@ -1584,9 +1621,10 @@ class App {
         app.exportProject();
         return;
       }
-      // Escape deselect all
+      // Escape deselect all / cancel running
       if (e.code === 'Escape') {
         e.preventDefault();
+        if (app._isRunning && app._cancelToken) { app._cancelToken.abort(); return; }
         app.selectNodes([]);
         return;
       }
@@ -1882,6 +1920,12 @@ class App {
 
   rerenderNode(node) {
     this.pruneInvalidConnectionsForNode(node);
+    // Destroy stale CodeMirror instances
+    if (this._cmViews) {
+      for (const [key, view] of this._cmViews) {
+        if (key.startsWith(node.id + ':')) { view.destroy(); this._cmViews.delete(key); }
+      }
+    }
     if (node.el) node.el.remove();
     this.renderNode(node);
     this.updatePortPositions(node);
@@ -1962,44 +2006,99 @@ class App {
         upload.appendChild(btn);
         upload.appendChild(inp);
         body.appendChild(upload);
-      } else if (p.type === 'code' || p.type === 'noteText') {
+      } else if (p.type === 'code') {
+        // CodeMirror-enhanced editor for custom node JS code
+        const wrap = document.createElement('div');
+        wrap.className = 'cm-wrap';
+        body.appendChild(wrap);
+        // Fallback textarea (hidden when CM loads)
         const ta = document.createElement('textarea');
         ta.value = node.params[p.id];
-        ta.rows = p.type === 'noteText' ? 5 : 6;
+        ta.spellcheck = false;
+        ta.style.cssText = 'display:none;flex:1;min-height:80px;resize:none;';
+        ta.oninput = () => { node.params[p.id] = ta.value; this.scheduleSave(); };
+        wrap.appendChild(ta);
+        // Async mount CodeMirror
+        this._loadCodeMirror().then(cm => {
+          if (cm && wrap.isConnected) {
+            ta.style.display = 'none';
+            const view = this._createCmEditor(wrap, node, p.id);
+            if (view) {
+              // Store for cleanup / external value sync
+              if (!this._cmViews) this._cmViews = new Map();
+              this._cmViews.set(node.id + ':' + p.id, view);
+            } else {
+              ta.style.display = ''; // fallback
+            }
+          } else {
+            ta.style.display = ''; // offline fallback
+          }
+        });
+        // Resize handle
+        const handle = document.createElement('div');
+        handle.className = 'resize-handle';
+        let startX, startY, startW, startH, startZoom;
+        handle.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          startX = e.clientX;
+          startY = e.clientY;
+          startW = el.offsetWidth;
+          startH = el.offsetHeight;
+          startZoom = this.canvasZoom;
+          const onMove = (ev) => {
+            const dx = (ev.clientX - startX) / startZoom;
+            const dy = (ev.clientY - startY) / startZoom;
+            el.style.width = (startW + dx) + 'px';
+            el.style.height = (startH + dy) + 'px';
+          };
+          const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            this.updatePortPositions(node);
+            this.renderConnections();
+            this.scheduleSave();
+          };
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+        body.appendChild(handle);
+      } else if (p.type === 'noteText') {
+        const ta = document.createElement('textarea');
+        ta.value = node.params[p.id];
+        ta.rows = 5;
         ta.spellcheck = false;
         ta.oninput = () => { node.params[p.id] = ta.value; this.scheduleSave(); };
         body.appendChild(ta);
-        // Resize handle for text-heavy nodes
-        if (node.type === 'custom' || node.type === 'note') {
-          const handle = document.createElement('div');
-          handle.className = 'resize-handle';
-          let startX, startY, startW, startH, startZoom;
-          handle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            startX = e.clientX;
-            startY = e.clientY;
-            startW = el.offsetWidth;
-            startH = el.offsetHeight;
-            startZoom = this.canvasZoom;
-            const onMove = (ev) => {
-              const dx = (ev.clientX - startX) / startZoom;
-              const dy = (ev.clientY - startY) / startZoom;
-              el.style.width = (startW + dx) + 'px';
-              el.style.height = (startH + dy) + 'px';
-            };
-            const onUp = () => {
-              document.removeEventListener('mousemove', onMove);
-              document.removeEventListener('mouseup', onUp);
-              this.updatePortPositions(node);
-              this.renderConnections();
-              this.scheduleSave();
-            };
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
-          });
-          body.appendChild(handle);
-        }
+        // Resize handle for note nodes
+        const handle = document.createElement('div');
+        handle.className = 'resize-handle';
+        let startX2, startY2, startW2, startH2, startZoom2;
+        handle.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          startX2 = e.clientX;
+          startY2 = e.clientY;
+          startW2 = el.offsetWidth;
+          startH2 = el.offsetHeight;
+          startZoom2 = this.canvasZoom;
+          const onMove = (ev) => {
+            const dx = (ev.clientX - startX2) / startZoom2;
+            const dy = (ev.clientY - startY2) / startZoom2;
+            el.style.width = (startW2 + dx) + 'px';
+            el.style.height = (startH2 + dy) + 'px';
+          };
+          const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            this.updatePortPositions(node);
+            this.renderConnections();
+            this.scheduleSave();
+          };
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+        body.appendChild(handle);
       } else if (p.type === 'number') {
         const inp = document.createElement('input');
         inp.type = 'number';
@@ -2996,13 +3095,13 @@ class App {
     return taps % 2 === 0 ? taps + 1 : taps;
   }
 
-  executeNode(node, runOptions = {}) {
+  async executeNode(node, runOptions = {}) {
     if (this.nodeCache.has(node.id)) return;
     // Execute upstream first
     for (const conn of this.connections) {
       if (conn.toNode === node.id) {
         const upNode = this.nodes.find(n => n.id === conn.fromNode);
-        if (upNode) this.executeNode(upNode, runOptions);
+        if (upNode) await this.executeNode(upNode, runOptions);
       }
     }
 
@@ -3085,9 +3184,13 @@ class App {
         }, {});
         const customOutputs = this.getNodeOutputs(node);
         const signal = inputs.in || [];
+        const sleep = (ms) => this._sleep(ms);
+        const aborted = () => this._cancelToken?.signal.aborted ?? false;
         try {
-          const fn = new Function('signal', 'sampleRate', 'inputs', node.params.code || 'return signal;');
-          const result = fn(signal, this.sampleRate, inputs);
+          const code = node.params.code || 'return signal;';
+          const fn = new Function('signal', 'sampleRate', 'inputs', 'sleep', 'aborted', `return (async () => {\n${code}\n})();`);
+          const result = await fn(signal, this.sampleRate, inputs, sleep, aborted);
+          if (result instanceof Promise) throw new Error('自定义节点返回值不能是 Promise——请确保 return 的是数组或对象，不是未 await 的 Promise');
           if (Array.isArray(result)) {
             outputs[customOutputs[0].id] = result;
             for (const port of customOutputs.slice(1)) outputs[port.id] = [];
@@ -3097,8 +3200,12 @@ class App {
             for (const port of customOutputs) outputs[port.id] = [];
           }
         } catch (err) {
-          console.error('Custom node error:', err);
-          this.toast(`自定义节点错误: ${err.message}`, 'error');
+          if (err?.name === 'AbortError' || (this._cancelToken && this._cancelToken.signal.aborted)) {
+            this.toast('已取消', 'info');
+          } else {
+            console.error('Custom node error:', err);
+            this.toast(`自定义节点错误: ${err.message}`, 'error');
+          }
           for (const port of customOutputs) outputs[port.id] = [];
         }
         break;
@@ -3545,6 +3652,65 @@ class App {
     return new Promise(resolve => requestAnimationFrame(() => resolve()));
   }
 
+  _sleep(ms) {
+    return new Promise((resolve, reject) => {
+      const id = setTimeout(resolve, ms);
+      if (this._cancelToken) {
+        this._cancelToken.signal.addEventListener('abort', () => {
+          clearTimeout(id);
+          reject(new DOMException('已取消', 'AbortError'));
+        }, { once: true });
+      }
+    });
+  }
+
+  async _loadCodeMirror() {
+    if (this._cm !== undefined) return this._cm;
+    try {
+      const [cmMod, jsMod, themeMod] = await Promise.all([
+        import('https://esm.sh/codemirror@6.0.1'),
+        import('https://esm.sh/@codemirror/lang-javascript@6.2.3'),
+        import('https://esm.sh/@codemirror/theme-one-dark@6.1.2')
+      ]);
+      this._cm = {
+        EditorView: cmMod.EditorView,
+        basicSetup: cmMod.basicSetup,
+        javascript: jsMod.javascript,
+        oneDark: themeMod.oneDark
+      };
+    } catch (e) {
+      console.warn('CodeMirror CDN 加载失败，回退到纯文本框:', e.message);
+      this._cm = null;
+    }
+    return this._cm;
+  }
+
+  _createCmEditor(container, node, paramId) {
+    const cm = this._cm;
+    if (!cm) return null;
+    try {
+      const view = new cm.EditorView({
+        doc: node.params[paramId] || '',
+        extensions: [
+          cm.basicSetup,
+          cm.javascript(),
+          cm.oneDark,
+          cm.EditorView.updateListener.of(update => {
+            if (update.docChanged) {
+              node.params[paramId] = view.state.doc.toString();
+              this.scheduleSave();
+            }
+          })
+        ],
+        parent: container
+      });
+      return view;
+    } catch (e) {
+      console.warn('CodeMirror 创建失败:', e.message);
+      return null;
+    }
+  }
+
   showRunProgress(label = '准备运行') {
     if (!this.runProgress) return;
     this.runProgress.classList.add('active');
@@ -3567,8 +3733,15 @@ class App {
   }
 
   async run(options = {}) {
-    if (this._isRunning) { this.toast('正在运行，请稍候', 'info'); return; }
+    if (this._isRunning) {
+      // Re-run cancels current execution
+      if (this._cancelToken) { this._cancelToken.abort(); }
+      this.toast('已取消，可重新运行', 'info');
+      return;
+    }
     this._isRunning = true;
+    this._cancelToken = new AbortController();
+    const cancelSignal = this._cancelToken.signal; // capture locally to survive race with re-run
     const runOptions = {
       autoExportCsv: options.autoExportCsv !== undefined ? options.autoExportCsv : this.isAutoExportEnabled(),
       manualCsvExportNodeId: options.manualCsvExportNodeId
@@ -3587,9 +3760,11 @@ class App {
 
       const totalNodes = Math.max(1, this.nodes.length);
       for (const [index, node] of this.nodes.entries()) {
-        this.updateRunProgress(index, totalNodes, `正在运行 ${node.def.title}`);
+        const isCustom = node.type === 'custom';
+        this.updateRunProgress(index, totalNodes, isCustom ? `等待 ${node.def.title}` : `正在运行 ${node.def.title}`);
         await this.nextFrame();
-        this.executeNode(node, runOptions);
+        await this.executeNode(node, runOptions);
+        if (cancelSignal.aborted) break;
       }
       this.updateRunProgress(totalNodes, totalNodes, '生成图表');
       await this.nextFrame();
@@ -3613,6 +3788,7 @@ class App {
       this.toast('运行完成', 'success');
     } finally {
       this._isRunning = false;
+      this._cancelToken = null;
       this.hideRunProgress();
     }
   }
