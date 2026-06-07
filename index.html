@@ -35,13 +35,13 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 /* ========== Toolbar (removed - using sidebar) ========== */
 
 /* ========== Viewport ========== */
-.viewport { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: visible; z-index: 1; background-color: #1e1e1e; }
+.viewport { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: visible; z-index: 1; }
 
 /* ========== Canvas Grid ========== */
-.grid-canvas { position: absolute; top: 0; left: 0; pointer-events: none; background-color: #1e1e1e; background-image: linear-gradient(#1b2838 1px, transparent 1px), linear-gradient(90deg, #1b2838 1px, transparent 1px); background-size: 30px 30px; }
+.grid-canvas { position: absolute; top: 0; left: 0; pointer-events: none; background-color: #1e1e1e; z-index: 1; }
 
 /* ========== SVG Connections ========== */
-.connections-svg { position: absolute; left: -5000px; top: -5000px; width: 10000px; height: 10000px; pointer-events: none; z-index: 5; }
+.connections-svg { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 5; overflow: hidden; }
 .connections-svg .conn-hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; }
 .connections-svg .conn-line { fill: none; stroke: var(--vscode-accent-soft); stroke-width: 2.5; pointer-events: none; transition: stroke 0.15s, stroke-width 0.15s; }
 .connections-svg .conn-group:hover .conn-line { stroke: var(--vscode-accent); stroke-width: 3.5; }
@@ -50,7 +50,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .connections-svg path.temp { fill: none; stroke: var(--vscode-accent); stroke-dasharray: 8 4; stroke-width: 2; pointer-events: none; }
 
 /* ========== Nodes ========== */
-.node { position: absolute; min-width: 200px; border-radius: 6px; border: 1px solid var(--vscode-border); border-top: 3px solid var(--node-color, var(--vscode-accent)); box-shadow: 0 3px 10px rgba(0,0,0,0.35); z-index: 10; user-select: none; background: var(--vscode-tab); }
+.node { position: absolute; min-width: 200px; border-radius: 6px; border: 1px solid var(--vscode-border); box-shadow: 0 3px 10px rgba(0,0,0,0.35); z-index: 10; user-select: none; background: var(--vscode-tab); }
 .node:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.45); border-color: #4b4b4b; }
 .node.selected { box-shadow: 0 0 0 2px var(--vscode-accent), 0 6px 16px rgba(0,0,0,0.45); }
 .selection-box { position: absolute; display: none; border: 1px solid var(--vscode-accent); background: rgba(0,122,204,0.18); pointer-events: none; z-index: 60; }
@@ -58,7 +58,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
 .canvas-focus-crosshair.active { opacity: 1; }
 .canvas-focus-crosshair-h { position: absolute; left: 0; right: 0; height: 1px; top: var(--crosshair-y, 50%); background: var(--vscode-warning); box-shadow: 0 0 10px rgba(204,167,0,0.85); }
 .canvas-focus-crosshair-v { position: absolute; top: 0; bottom: 0; width: 1px; left: var(--crosshair-x, 50%); background: var(--vscode-warning); box-shadow: 0 0 10px rgba(204,167,0,0.85); }
-.node-header { padding: 8px 12px; border-radius: 3px 5px 0 0; cursor: move; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; background: var(--vscode-tab); color: var(--vscode-text); border-bottom: 1px solid var(--vscode-border); }
+.node-header { padding: 8px 12px; border-radius: 3px 5px 0 0; cursor: move; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; background: var(--node-color, var(--vscode-accent)); color: #fff; border-bottom: 1px solid rgba(0,0,0,0.25); }
 .node-body { padding: 10px 12px; background: var(--vscode-side); border-radius: 0 0 5px 3px; }
 .node-body label { font-size: 11px; color: var(--vscode-muted); display: block; margin-bottom: 3px; }
 .node-body input, .node-body select { width: 100%; padding: 4px 8px; border: 1px solid var(--vscode-input); border-radius: 3px; background: var(--vscode-input-bg); color: var(--vscode-text); font-size: 12px; margin-bottom: 6px; }
@@ -306,9 +306,9 @@ html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI
     </div>
   </div>
   <div class="canvas-panel" id="canvasPanel">
+    <canvas class="grid-canvas" id="gridCanvas"></canvas>
+    <svg class="connections-svg" id="connectionsSvg"></svg>
     <div class="viewport" id="viewport">
-      <canvas class="grid-canvas" id="gridCanvas"></canvas>
-      <svg class="connections-svg" id="connectionsSvg"></svg>
     </div>
     <div class="canvas-focus-crosshair" id="canvasFocusCrosshair" aria-hidden="true"><div class="canvas-focus-crosshair-h"></div><div class="canvas-focus-crosshair-v"></div></div>
     <div class="empty-hint" id="emptyHint">从左侧栏拖拽节点到画布<br>从输出端口 (右侧圆点) 拖拽到输入端口 (左侧圆点) 连线<br>画布空白处左键拖拽框选，拖动已选节点可整体移动<br>点击连线变红后再点删除 / 右键直接删除<br>按 Delete 键删除选中节点 / F5 运行<br>鼠标中键拖拽平移视图 / 空格键复位<br><br>点击左下角「演示数据」可快速体验</div>
@@ -719,6 +719,7 @@ const NODE_DEFS = {
     inputs: [{ id: 'in', label: '输入' }],
     outputs: [{ id: 'out', label: '输出' }],
     params: [
+      { id: 'name', label: '节点名称', type: 'text', default: '' },
       { id: 'inputCount', label: '输入端口数量', type: 'number', default: 1, affectsPorts: true },
       { id: 'outputCount', label: '输出端口数量', type: 'number', default: 1, affectsPorts: true },
       { id: 'inputNames', label: '输入端口名称', type: 'portNames', direction: 'in', default: {} },
@@ -1053,7 +1054,7 @@ class App {
     this.resize();
     this.drawGrid();
 
-    window.addEventListener('resize', () => { this.resize(); this.drawGrid(); this.updateChartScrollbar(); });
+    window.addEventListener('resize', () => { this.resize(); this.updateChartScrollbar(); });
   }
 
   // ---- Undo/Redo ----
@@ -1189,22 +1190,27 @@ class App {
   }
 
   resize() {
-    // Make grid canvas very large to cover zoomed out view
-    const size = 10000;
+    const rect = this.canvasPanel.getBoundingClientRect();
+    const w = Math.max(1, rect.width);
+    const h = Math.max(1, rect.height);
     const dpr = this.getGridDpr();
-    this.gridCanvas.width = size * dpr;
-    this.gridCanvas.height = size * dpr;
-    this.gridCanvas.style.width = size + 'px';
-    this.gridCanvas.style.height = size + 'px';
-    this.gridCanvas.style.left = (-size / 2) + 'px';
-    this.gridCanvas.style.top = (-size / 2) + 'px';
+    this.gridCanvas.width = w * dpr;
+    this.gridCanvas.height = h * dpr;
+    this.gridCanvas.style.width = w + 'px';
+    this.gridCanvas.style.height = h + 'px';
+    this.svg.setAttribute('width', w);
+    this.svg.setAttribute('height', h);
+    this.svg.style.width = w + 'px';
+    this.svg.style.height = h + 'px';
     this.drawGrid();
+    this.updateSvgViewBox();
   }
 
   drawGrid() {
     const ctx = this.gridCtx;
     const dpr = this.getGridDpr();
     const w = this.gridCanvas.width, h = this.gridCanvas.height;
+    const cssW = w / dpr, cssH = h / dpr;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = '#1e1e1e';
     ctx.fillRect(0, 0, w, h);
@@ -1212,11 +1218,12 @@ class App {
     ctx.strokeStyle = '#1b2838';
     ctx.lineWidth = 1;
     const step = 30;
-    const dw = w / dpr, dh = h / dpr;
-    const offX = ((this.panOffset.x % step) + step) % step;
-    const offY = ((this.panOffset.y % step) + step) % step;
-    for (let x = offX; x < dw; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, dh); ctx.stroke(); }
-    for (let y = offY; y < dh; y += step) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(dw, y); ctx.stroke(); }
+    const screenStep = step * this.canvasZoom;
+    if (screenStep < 4) return;
+    const offX = ((this.panOffset.x % screenStep) + screenStep) % screenStep;
+    const offY = ((this.panOffset.y % screenStep) + screenStep) % screenStep;
+    for (let x = offX; x < cssW; x += screenStep) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, cssH); ctx.stroke(); }
+    for (let y = offY; y < cssH; y += screenStep) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cssW, y); ctx.stroke(); }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 
@@ -1424,6 +1431,25 @@ class App {
   applyViewportTransform() {
     this.viewport.style.transform = `translate(${this.panOffset.x}px, ${this.panOffset.y}px) scale(${this.canvasZoom})`;
     this.viewport.style.transformOrigin = '0 0';
+    this.drawGrid();
+    this.updateSvgViewBox();
+  }
+
+  updateSvgViewBox() {
+    const rect = this.canvasPanel.getBoundingClientRect();
+    const w = Math.max(1, rect.width);
+    const h = Math.max(1, rect.height);
+    const topLeft = this.panelToWorldPoint(0, 0);
+    const bottomRight = this.panelToWorldPoint(w, h);
+    const vbX = topLeft.x;
+    const vbY = topLeft.y;
+    const vbW = bottomRight.x - topLeft.x;
+    const vbH = bottomRight.y - topLeft.y;
+    this.svg.setAttribute('viewBox', `${vbX} ${vbY} ${vbW} ${vbH}`);
+    this.svg.setAttribute('width', w);
+    this.svg.setAttribute('height', h);
+    this.svg.style.width = w + 'px';
+    this.svg.style.height = h + 'px';
   }
 
   panelToWorldPoint(x, y) {
@@ -2103,6 +2129,7 @@ class App {
   getNodeTitle(node) {
     if (node.type === 'input' && node.params.note) return `${node.def.title} - ${node.params.note}`;
     if (node.type === 'csvoutput' && node.params.name) return `${node.def.title} - ${node.params.name}`;
+    if (node.type === 'custom' && node.params.name) return node.params.name;
     return node.def.title;
   }
 
@@ -2485,10 +2512,8 @@ class App {
   }
 
   panelToSvgPoint(x, y) {
-    return {
-      x: (x - this.panOffset.x) / this.canvasZoom + 5000,
-      y: (y - this.panOffset.y) / this.canvasZoom + 5000
-    };
+    // Convert panel (screen) coordinates to world coordinates
+    return this.panelToWorldPoint(x, y);
   }
 
   drawTempConnection(panelX, panelY) {
@@ -2522,10 +2547,10 @@ class App {
     if (!node || !node.el) return { x: 0, y: 0 };
     const port = node.el.querySelector(`.port[data-node-id="${nodeId}"][data-port-id="${portId}"]`);
     if (!port) return { x: 0, y: 0 };
-    // Position in SVG coordinate system (SVG is offset by -5000)
+    // Position in world coordinates (SVG viewBox handles mapping)
     return {
-      x: node.x + port.offsetLeft + 7 + 5000,
-      y: node.y + port.offsetTop + 7 + 5000
+      x: node.x + port.offsetLeft + 7,
+      y: node.y + port.offsetTop + 7
     };
   }
 
@@ -2533,6 +2558,8 @@ class App {
     this.panOffset = { x: 0, y: 0 };
     this.canvasZoom = 1;
     this.applyViewportTransform();
+    this.drawGrid();
+    this.updateSvgViewBox();
     this.scheduleSave();
   }
 
@@ -2626,6 +2653,7 @@ class App {
       g.appendChild(hit);
       this.svg.appendChild(g);
     }
+    this.updateSvgViewBox();
   }
 
   // ---- Signal Execution ----
