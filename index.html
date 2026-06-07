@@ -113,8 +113,9 @@ html, body { width: 100%; height: 100%; overflow: hidden; user-select: none; -we
 .node-custom .node-body { display: flex; flex-direction: column; position: relative; flex: 1; overflow: hidden; }
 .node-custom .node-body label { flex-shrink: 0; }
 .node-custom .node-body textarea { flex: 1; min-height: 40px; resize: none; }
-.node-custom .node-body .cm-wrap { flex: 1; min-height: 80px; border: 1px solid var(--vscode-input); border-radius: 3px; }
-.node-custom .node-body .cm-wrap .cm-editor .cm-scroller { font-family: 'Consolas', 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; line-height: 1.6; scrollbar-gutter: stable; }
+.node-custom .node-body .cm-wrap { flex: 1; height: 200px; min-height: 80px; border: 1px solid var(--vscode-input); border-radius: 3px; }
+.node-custom .node-body .cm-wrap .cm-editor { height: 100%; }
+.node-custom .node-body .cm-wrap .cm-editor .cm-scroller { font-family: 'Consolas', 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; line-height: 1.6; overflow-y: scroll !important; }
 .node-custom .node-body .cm-wrap .cm-editor.cm-focused { outline: none; }
 .node-custom .resize-handle { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; z-index: 10; }
 .node-custom .resize-handle::after { content: ''; position: absolute; right: 3px; bottom: 3px; width: 8px; height: 8px; border-right: 2px solid #555; border-bottom: 2px solid #555; }
@@ -3701,8 +3702,7 @@ class App {
           cm.javascript(),
           cm.oneDark,
           cm.EditorView.theme({
-            '&': { maxHeight: '280px' },
-            '.cm-scroller': { overflow: 'auto' }
+            '&': { height: '100%' }
           }),
           cm.EditorView.updateListener.of(update => {
             if (update.docChanged) {
