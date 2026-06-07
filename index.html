@@ -1972,7 +1972,7 @@ class App {
         if (node.type === 'custom' || node.type === 'note') {
           const handle = document.createElement('div');
           handle.className = 'resize-handle';
-          let startX, startY, startW, startH;
+          let startX, startY, startW, startH, startZoom;
           handle.addEventListener('mousedown', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -1980,9 +1980,12 @@ class App {
             startY = e.clientY;
             startW = el.offsetWidth;
             startH = el.offsetHeight;
+            startZoom = this.canvasZoom;
             const onMove = (ev) => {
-              el.style.width = (startW + ev.clientX - startX) + 'px';
-              el.style.height = (startH + ev.clientY - startY) + 'px';
+              const dx = (ev.clientX - startX) / startZoom;
+              const dy = (ev.clientY - startY) / startZoom;
+              el.style.width = (startW + dx) + 'px';
+              el.style.height = (startH + dy) + 'px';
             };
             const onUp = () => {
               document.removeEventListener('mousemove', onMove);
