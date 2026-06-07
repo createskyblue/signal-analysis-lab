@@ -276,6 +276,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; user-select: none; -we
       <div class="sidebar-group-title">特征提取</div>
       <div class="sidebar-item" onclick="app.addNode('peakdetector')"><span class="dot" style="background:#e5c07b"></span>峰谷检测器</div>
       <div class="sidebar-item" onclick="app.addNode('interval2bpm')"><span class="dot" style="background:#c678dd"></span>间隔→BPM</div>
+      <div class="sidebar-item" onclick="app.addNode('squarewave')"><span class="dot" style="background:#f39c12"></span>矩形波检测器</div>
     </div>
     <div class="sidebar-group">
       <div class="sidebar-group-title">窗口统计</div>
@@ -286,7 +287,6 @@ html, body { width: 100%; height: 100%; overflow: hidden; user-select: none; -we
       <div class="sidebar-item" onclick="app.addNode('extremewin')"><span class="dot" style="background:#e67e22"></span>极值窗口</div>
       <div class="sidebar-item" onclick="app.addNode('stdwin')"><span class="dot" style="background:#98c379"></span>滑动标准差</div>
       <div class="sidebar-item" onclick="app.addNode('entropy')"><span class="dot" style="background:#f4d03f"></span>因果窗口熵</div>
-      <div class="sidebar-item" onclick="app.addNode('squarewave')"><span class="dot" style="background:#f39c12"></span>矩形波检测器</div>
     </div>
     <div class="sidebar-group">
       <div class="sidebar-group-title">降采样</div>
@@ -791,7 +791,8 @@ const NODE_DEFS = {
       { id: 'frequency', label: '频率 (Hz)', type: 'number', default: 10 },
       { id: 'high', label: '高电平', type: 'number', default: 1 },
       { id: 'low', label: '低电平', type: 'number', default: -1 },
-      { id: 'length', label: '输出长度', type: 'number', default: 1000 }
+      { id: 'length', label: '输出长度', type: 'number', default: 1000 },
+      { id: '_info', label: '', type: 'info', default: '生成指定频率和幅值的正弦波。接入长度参考时输出长度自动跟随参考信号。' }
     ]
   },
   lowpass: {
@@ -840,7 +841,8 @@ const NODE_DEFS = {
     outputs: [{ id: 'out', label: '输出' }],
     params: [
       { id: 'cutoff', label: '截止频率 (Hz)', type: 'number', default: 50 },
-      { id: 'taps', label: '抽头数量 (奇数)', type: 'number', default: 31 }
+      { id: 'taps', label: '抽头数量 (奇数)', type: 'number', default: 31 },
+      { id: '_info', label: '', type: 'info', default: 'Hamming 窗 sinc 低通 FIR。抽头数越大衰减越陡但计算量也越大。\n与 RC 滤波器不同：FIR 是线性相位（各频率延迟一致），适合对波形形状有要求的场景。' }
     ]
   },
   madfilter: {
@@ -853,7 +855,8 @@ const NODE_DEFS = {
     params: [
       { id: 'size', label: '窗口大小', type: 'number', default: 7 },
       { id: 'threshold', label: '阈值倍数', type: 'number', default: 3 },
-      { id: 'scale', label: 'MAD 缩放系数', type: 'number', default: 1.4826 }
+      { id: 'scale', label: 'MAD 缩放系数', type: 'number', default: 1.4826 },
+      { id: '_info', label: '', type: 'info', default: '对每个采样点，取窗口内中位数 med 和中位绝对偏差 MAD。若 |x-med| > 阈值×scale×MAD，则替换为中位数。\n阈值=0 时退化为纯中值滤波。scale=1.4826 使 MAD≈标准差（正态假设）。\n输出 out=滤波结果, mad=局部 MAD 轨迹（用于调参）。' }
     ]
   },
   fft: {
@@ -863,7 +866,8 @@ const NODE_DEFS = {
     params: [
       { id: 'size', label: 'FFT 点数', type: 'number', default: 1024 },
       { id: 'minFreq', label: '最小频率 (Hz)', type: 'number', default: '', optional: true, min: 0 },
-      { id: 'maxFreq', label: '最大频率 (Hz)', type: 'number', default: '', optional: true, min: 0 }
+      { id: 'maxFreq', label: '最大频率 (Hz)', type: 'number', default: '', optional: true, min: 0 },
+      { id: '_info', label: '', type: 'info', default: '计算输入信号的单边幅值谱（FFT 取模）。点数越大频率分辨力越高（Δf=采样率/点数）。\n最小/最大频率留空时默认显示 0~采样率/2。输出 X 轴单位为 Hz。' }
     ]
   },
   custom: {
@@ -892,7 +896,8 @@ const NODE_DEFS = {
     inputs: [{ id: 'in', label: '输入' }],
     outputs: [{ id: 'out1', label: '输出1' }, { id: 'out2', label: '输出2' }],
     params: [
-      { id: 'count', label: '输出数量', type: 'number', default: 2, affectsPorts: true }
+      { id: 'count', label: '输出数量', type: 'number', default: 2, affectsPorts: true },
+      { id: '_info', label: '', type: 'info', default: '一路信号复制为 N 路完全相同的输出，输出数量可配置。用于将同一信号同时送入多个下游节点。' }
     ]
   },
   switch: {
@@ -911,7 +916,8 @@ const NODE_DEFS = {
     params: [
       { id: 'count', label: '端口数量', type: 'number', default: 2, affectsPorts: true },
       { id: 'mode', label: '方向', type: 'select', options: ['多入一出', '一入多出'], default: '多入一出', affectsPorts: true },
-      { id: 'routes', label: '启用通道', type: 'routeChecks', default: {} }
+      { id: 'routes', label: '启用通道', type: 'routeChecks', default: {} },
+      { id: '_info', label: '', type: 'info', default: '\"多入一出\"：从多路输入中选一路输出。\"一入多出\"：一路输入复制到多路输出（可启用/禁用各通道）。\n用\"上一个/下一个\"按钮切换选中的通道。只显示已启用的通道。' }
     ]
   },
   weightedmixer: {
@@ -920,7 +926,8 @@ const NODE_DEFS = {
     outputs: [{ id: 'out', label: '合成输出' }],
     params: [
       { id: 'count', label: '输入数量', type: 'number', default: 2, affectsPorts: true },
-      { id: 'weights', label: '输入权重', type: 'inputWeights', default: {} }
+      { id: 'weights', label: '输入权重', type: 'inputWeights', default: {} },
+      { id: '_info', label: '', type: 'info', default: '多路信号按各自权重逐点加权求和：out[i]=Σ(in_k[i]×w_k)。\n未设置的权重默认为 1。可用于混合多路信号或实现软切换。' }
     ]
   },
   cutbeg: {
@@ -1030,7 +1037,8 @@ const NODE_DEFS = {
     outputs: [{ id: 'out', label: '输出' }],
     params: [
       { id: 'mode', label: '范围模式', type: 'select', options: ['全部', '窗口'], default: '全部' },
-      { id: 'window', label: '窗口大小', type: 'number', default: 32, enabledWhen: { param: 'mode', value: '窗口' } }
+      { id: 'window', label: '窗口大小', type: 'number', default: 32, enabledWhen: { param: 'mode', value: '窗口' } },
+      { id: '_info', label: '', type: 'info', default: '将信号线性映射到 [-1, 1] 范围。\"全部\"用整个缓冲区做一次 min-max 归一化；\"窗口\"用滑动窗口逐点归一化，适合幅值随时间变化的信号。' }
     ]
   },
   phaseshifter: {
@@ -1055,7 +1063,8 @@ const NODE_DEFS = {
     outputs: [{ id: 'out', label: '输出' }],
     params: [
       { id: 'window', label: '窗口大小', type: 'number', default: 32 },
-      { id: 'bins', label: '分桶数量', type: 'number', default: 16 }
+      { id: 'bins', label: '分桶数量', type: 'number', default: 16 },
+      { id: '_info', label: '', type: 'info', default: '在因果窗口内将信号幅值等距分桶，计算 Shannon 信息熵（单位 bit）。\n熵高→幅值分布均匀（噪声/复杂信号）；熵低→幅值集中在少数区间（规律信号如正弦波）。\n分桶越多分辨力越强但噪声敏感度也越高。' }
     ]
   },
   squarewave: {
@@ -1071,7 +1080,8 @@ const NODE_DEFS = {
       { id: 'window', label: '窗口大小', type: 'number', default: 128 },
       { id: 'thresholdMode', label: '阈值模式', type: 'select', options: ['自动', '手动'], default: '自动' },
       { id: 'threshold', label: '手动阈值', type: 'number', default: 0, enabledWhen: { param: 'thresholdMode', value: '手动' } },
-      { id: 'minEdges', label: '最少边沿数', type: 'number', default: 4 }
+      { id: 'minEdges', label: '最少边沿数', type: 'number', default: 4 },
+      { id: '_info', label: '', type: 'info', default: '在因果窗口内检测阈值穿越边沿，提取完整周期（上升沿→下降沿→下一上升沿），计算周期/占空比/抖动，输出 0~1 规律度评分。\n规律度越接近 1 表示信号越像稳定矩形波。窗口至少包含 2 个完整周期才能有效检测。' }
     ]
   },
   abs: {
@@ -1086,7 +1096,8 @@ const NODE_DEFS = {
     outputs: [{ id: 'out', label: '输出' }],
     params: [
       { id: 'threshold', label: '阈值 (B未连接时)', type: 'number', default: 0.5 },
-      { id: 'hyst', label: '迟滞 (0=禁用)', type: 'number', default: 0.1 }
+      { id: 'hyst', label: '迟滞 (0=禁用)', type: 'number', default: 0.1 },
+      { id: '_info', label: '', type: 'info', default: '将连续信号转为 0/1 方波。信号 > 阈值+Hyst → 输出 1；信号 < 阈值-Hyst → 输出 0；中间区域保持上一状态。\n迟滞越大抗噪越强，但会延迟翻转时刻。hyst=0 退化为普通过零比较器。\nB 端口未连接时使用参数\"阈值\"；连接后使用 B 端口的逐点值作为阈值。' }
     ]
   },
   kalman: {
@@ -1104,7 +1115,8 @@ const NODE_DEFS = {
     inputs: [{ id: 'in', label: '输入' }],
     outputs: [{ id: 'out', label: '输出' }],
     params: [
-      { id: 'size', label: '窗口大小', type: 'number', default: 5 }
+      { id: 'size', label: '窗口大小', type: 'number', default: 5 },
+      { id: '_info', label: '', type: 'info', default: '输出窗口内中位数。比均值更抗孤立尖峰干扰，适合去除椒盐噪声。' }
     ]
   },
   maxwin: {
@@ -1128,7 +1140,8 @@ const NODE_DEFS = {
     inputs: [{ id: 'in', label: '输入' }],
     outputs: [{ id: 'out', label: '输出' }],
     params: [
-      { id: 'size', label: '窗口大小', type: 'number', default: 5 }
+      { id: 'size', label: '窗口大小', type: 'number', default: 5 },
+      { id: '_info', label: '', type: 'info', default: '输出窗口内 max-min 差值（峰峰值）。衡量信号局部波动幅度。' }
     ]
   },
   probe: {
