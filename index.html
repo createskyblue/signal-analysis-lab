@@ -344,6 +344,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; user-select: none; -we
     <div class="chart-header">
       <span>波形显示</span>
       <div style="display:flex;align-items:center;gap:6px;">
+        <button class="run-btn" onclick="app.copyContext()" title="复制项目上下文到剪贴板，可粘贴到外部 AI 分析">📋 复制上下文</button>
         <div class="auto-run-wrap" id="autoRunWrap">
           <button class="run-btn auto-btn" id="autoRunBtn" onclick="app.toggleAutoRun()">⏱</button>
           <input type="number" class="auto-interval" id="autoInterval" value="2" min="0.1" step="0.1" title="刷新间隔(秒)">
@@ -4444,6 +4445,29 @@ class App {
       console.warn('Load failed:', e);
       return false;
     }
+  }
+
+  copyContext() {
+    const raw = this.serialize();
+    const slim = {
+      repo: raw.repo,
+      version: raw.version,
+      sampleRate: raw.sampleRate,
+      nodes: raw.nodes.map(n => ({
+        id: n.id,
+        type: n.type,
+        x: n.x,
+        y: n.y,
+        params: n.params
+      })),
+      connections: raw.connections
+    };
+    const text = `<信号分析实验室>\n用户正在使用「信号处理实验室」——一个基于浏览器的可视化信号处理工具。\n下面是用户的项目上下文，请基于此帮用户分析和处理问题。\n\n## 仓库地址\nhttps://github.com/createskyblue/signal-analysis-lab\n\n## 当前流程图\n\`\`\`json\n${JSON.stringify(slim, null, 2)}\n\`\`\`\n\n## 自定义节点 API\n代码运行在 async 函数体内，支持 await。\n\n可用变量：\n  signal    — number[], 第一个输入端口的数组\n  inputs    — { in, in2, ... }, 所有输入端口的对象\n  sampleRate — number, 采样率 (Hz)\n  sleep(ms) — async 函数, 暂停 ms（取消时抛 AbortError）\n  aborted() — 返回 boolean, 是否已取消执行\n\n返回值：\n  单输出 → return number[]\n  多输出 → return { out: number[], out2: number[], ... }\n  不要 return Promise 对象\n</信号分析实验室>`;
+    navigator.clipboard.writeText(text).then(() => {
+      this.toast('上下文已复制到剪贴板', 'success');
+    }).catch(() => {
+      this.toast('复制失败，请重试', 'error');
+    });
   }
 
   exportProject() {
