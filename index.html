@@ -1368,6 +1368,12 @@ class App {
         app.exportProject();
         return;
       }
+      // Escape deselect all
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        app.selectNodes([]);
+        return;
+      }
       // Ctrl+A select all nodes
       if (e.code === 'KeyA' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
