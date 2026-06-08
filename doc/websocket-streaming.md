@@ -198,6 +198,25 @@ Return format:
 | No data after 15 seconds | `COLLECT_SECONDS` may be too short, or frames are being dropped. |
 | Wrong node name in progress bar | Fixed — make sure you're on the latest build. |
 
+## Important: Run Locally, Not from GitHub Pages
+
+**The live demo at `https://createskyblue.github.io/…` will NOT work with WebSocket streaming.**
+
+Browsers enforce a strict mixed-content policy: an HTTPS page may only open **secure** WebSocket connections (`wss://`). An ESP32 (or any typical embedded device) serves plain `ws://` without TLS. The browser will refuse the connection with no clear error message.
+
+### Solution
+
+Clone the repository and run the dev server locally:
+
+```bash
+git clone https://github.com/createskyblue/signal-analysis-lab.git
+cd signal-analysis-lab
+npm install
+npm run dev
+```
+
+Then open `http://localhost:3000` in your browser. A plain HTTP page can open `ws://` connections to your ESP32 without any restrictions.
+
 ## Notes
 
 - The browser must be on the same network as the ESP32 (or use the ESP32's AP mode at `192.168.4.1`).

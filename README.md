@@ -106,3 +106,15 @@ npm run build    # 生产构建，输出到 dist/
 在线地址：https://createskyblue.github.io/signal-analysis-lab/
 
 打开后点击左下角「📊 演示数据」按钮，自动生成含噪声的正弦波测试流程图。
+
+## WebSocket 实时数据流
+
+支持通过 WebSocket 从 ESP32 等设备接收实时传感器数据。使用「开始节点」+「自定义节点」构建数据采集链路：
+
+```
+开始节点 (触发) → 自定义节点 (WebSocket 客户端) → 滤波器链 → 示波器
+```
+
+> ⚠ **必须本地运行**：[在线版](https://createskyblue.github.io/signal-analysis-lab/) 是 HTTPS 页面，浏览器会拒绝连接 ESP32 的明文 `ws://`。请 `git clone` 后 `npm run dev` 在本地 `http://localhost:3000` 调试。
+
+详细用法见 [WebSocket 实时代码指南](doc/websocket-streaming.md)。

@@ -106,3 +106,15 @@ npm run build    # Production build to dist/
 Live demo: https://createskyblue.github.io/signal-analysis-lab/
 
 Click the "📊 Demo Data" button in the sidebar to load a pre-built noisy sine wave test pipeline.
+
+## WebSocket Streaming
+
+Receive real-time sensor data from ESP32 or any WebSocket source. Use the **Start Node** + **Custom Node** to build a data acquisition pipeline:
+
+```
+Start Node (trigger) → Custom Node (WebSocket client) → Filter chain → Oscilloscope
+```
+
+> ⚠ **Must run locally**: The [live demo](https://createskyblue.github.io/signal-analysis-lab/) is served over HTTPS, and browsers block plain `ws://` connections from secure pages. Clone the repo and run `npm run dev` to debug at `http://localhost:3000`.
+
+See [WebSocket Streaming Guide](doc/websocket-streaming.md) for details.
