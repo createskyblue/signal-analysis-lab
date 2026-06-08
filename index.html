@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>信号处理实验室</title>
+  <script type="module" crossorigin src="/signal-analysis-lab/assets/index-CNCySYrH.js"></script>
+  <link rel="stylesheet" crossorigin href="/signal-analysis-lab/assets/index-CftZrlZK.css">
+</head>
+<body>
+<div class="run-progress" id="runProgress" aria-hidden="true">
+  <div class="run-progress-fill" id="runProgressFill"></div>
+  <div class="run-progress-label" id="runProgressLabel"><span data-i18n="运行中">运行中</span></div>
+</div>
+<div class="app">
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-title"><span data-i18n="信号处理实验室">信号处理实验室</span></div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title" data-i18n="输入和输出">输入和输出</div>
+      <div class="sidebar-item" onclick="app.addNode('input')"><span class="dot" style="background:#2e86c1"></span><span data-i18n="CSV 输入">CSV 输入</span></div>
+      <div class="sidebar-item" onclick="app.addNode('signalgen')"><span class="dot" style="background:#1abc9c"></span><span data-i18n="信号发生器">信号发生器</span></div>
+      <div class="sidebar-item" onclick="app.addNode('csvoutput')"><span class="dot" style="background:#148f77"></span><span data-i18n="CSV 输出">CSV 输出</span></div>
+      <div class="sidebar-item" onclick="app.addNode('probe')"><span class="dot" style="background:#e74c3c"></span><span data-i18n="示波器">示波器</span></div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title" data-i18n="滤波器">滤波器</div>
+      <div class="sidebar-item" onclick="app.addNode('lowpass')"><span class="dot" style="background:#a569bd"></span><span data-i18n="低通滤波">低通滤波</span></div>
+      <div class="sidebar-item" onclick="app.addNode('highpass')"><span class="dot" style="background:#bb8fce"></span><span data-i18n="高通滤波">高通滤波</span></div>
+      <div class="sidebar-item" onclick="app.addNode('bandpass')"><span class="dot" style="background:#8e44ad"></span><span data-i18n="带通滤波">带通滤波</span></div>
+      <div class="sidebar-item" onclick="app.addNode('weighted')"><span class="dot" style="background:#7d3c98"></span><span data-i18n="指数平均滤波">指数平均滤波</span></div>
+      <div class="sidebar-item" onclick="app.addNode('firlinear')"><span class="dot" style="background:#5dade2"></span><span data-i18n="FIR 线性相位">FIR 线性相位</span></div>
+      <div class="sidebar-item" onclick="app.addNode('madfilter')"><span class="dot" style="background:#ce9178"></span><span data-i18n="Hampel滤波">Hampel滤波</span></div>
+      <div class="sidebar-item" onclick="app.addNode('kalman')"><span class="dot" style="background:#2980b9"></span><span data-i18n="卡尔曼滤波">卡尔曼滤波</span></div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title" data-i18n="频域分析">频域分析</div>
+      <div class="sidebar-item" onclick="app.addNode('fft')"><span class="dot" style="background:#dcdcaa"></span><span data-i18n="FFT 频谱">FFT 频谱</span></div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title" data-i18n="运算与变换">运算与变换</div>
+      <div class="sidebar-item" onclick="app.addNode('multiplier')"><span class="dot" style="background:#2980b9"></span><span data-i18n="乘法器">乘法器</span></div>
+      <div class="sidebar-item" onclick="app.addNode('weightedmixer')"><span class="dot" style="background:#d7ba7d"></span><span data-i18n="加权合成器">加权合成器</span></div>
+      <div class="sidebar-item" onclick="app.addNode('adder')"><span class="dot" style="background:#2ecc71"></span><span data-i18n="加法器">加法器</span></div>
+      <div class="sidebar-item" onclick="app.addNode('subtractor')"><span class="dot" style="background:#e74c3c"></span><span data-i18n="减法器">减法器</span></div>
+      <div class="sidebar-item" onclick="app.addNode('inverter')"><span class="dot" style="background:#af7ac5"></span><span data-i18n="反相器">反相器</span></div>
+      <div class="sidebar-item" onclick="app.addNode('abs')"><span class="dot" style="background:#16a085"></span><span data-i18n="绝对值">绝对值</span></div>
+      <div class="sidebar-item" onclick="app.addNode('logmultiplier')"><span class="dot" style="background:#2980b9"></span><span data-i18n="对数乘法器">对数乘法器</span></div>
+      <div class="sidebar-item" onclick="app.addNode('normalizer')"><span class="dot" style="background:#5dade2"></span><span data-i18n="归一化">归一化</span></div>
+      <div class="sidebar-item" onclick="app.addNode('limiter')"><span class="dot" style="background:#c0392b"></span><span data-i18n="限位器">限位器</span></div>
+      <div class="sidebar-item" onclick="app.addNode('phaseshifter')"><span class="dot" style="background:#8e44ad"></span><span data-i18n="移相器">移相器</span></div>
+      <div class="sidebar-item" onclick="app.addNode('hysteresis')"><span class="dot" style="background:#e74c3c"></span><span data-i18n="迟滞比较器">迟滞比较器</span></div>
+      <div class="sidebar-item" onclick="app.addNode('dcoffset')"><span class="dot" style="background:#e06c75"></span><span data-i18n="去直流偏置">去直流偏置</span></div>
+      <div class="sidebar-item" onclick="app.addNode('differentiator')"><span class="dot" style="background:#56b6c2"></span><span data-i18n="微分器">微分器</span></div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title" data-i18n="特征提取">特征提取</div>
+      <div class="sidebar-item" onclick="app.addNode('peakdetector')"><span class="dot" style="background:#e5c07b"></span><span data-i18n="峰谷检测器">峰谷检测器</span></div>
+      <div class="sidebar-item" onclick="app.addNode('interval2bpm')"><span class="dot" style="background:#c678dd"></span><span data-i18n="间隔→BPM">间隔→BPM</span></div>
+      <div class="sidebar-item" onclick="app.addNode('squarewave')"><span class="dot" style="background:#f39c12"></span><span data-i18n="矩形波检测器">矩形波检测器</span></div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title" data-i18n="窗口统计">窗口统计</div>
+      <div class="sidebar-item" onclick="app.addNode('avgwin')"><span class="dot" style="background:#1abc9c"></span><span data-i18n="Avg Win">Avg Win</span></div>
+      <div class="sidebar-item" onclick="app.addNode('medianwin')"><span class="dot" style="background:#8e44ad"></span><span data-i18n="中值窗口">中值窗口</span></div>
+      <div class="sidebar-item" onclick="app.addNode('maxwin')"><span class="dot" style="background:#c0392b"></span><span data-i18n="Max Win">Max Win</span></div>
+      <div class="sidebar-item" onclick="app.addNode('minwin')"><span class="dot" style="background:#2980b9"></span><span data-i18n="Min Win">Min Win</span></div>
+      <div class="sidebar-item" onclick="app.addNode('extremewin')"><span class="dot" style="background:#e67e22"></span><span data-i18n="极值窗口">极值窗口</span></div>
+      <div class="sidebar-item" onclick="app.addNode('stdwin')"><span class="dot" style="background:#98c379"></span><span data-i18n="滑动标准差">滑动标准差</span></div>
+      <div class="sidebar-item" onclick="app.addNode('entropy')"><span class="dot" style="background:#f4d03f"></span><span data-i18n="因果窗口熵">因果窗口熵</span></div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title" data-i18n="降采样">降采样</div>
+      <div class="sidebar-item" onclick="app.addNode('avgpool')"><span class="dot" style="background:#16a085"></span><span data-i18n="Avg Pool">Avg Pool</span></div>
+      <div class="sidebar-item" onclick="app.addNode('maxpool')"><span class="dot" style="background:#27ae60"></span><span data-i18n="Max Pool">Max Pool</span></div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title" data-i18n="裁剪截取">裁剪截取</div>
+      <div class="sidebar-item" onclick="app.addNode('cutbeg')"><span class="dot" style="background:#e67e22"></span><span data-i18n="Cut Beg">Cut Beg</span></div>
+      <div class="sidebar-item" onclick="app.addNode('cutend')"><span class="dot" style="background:#d35400"></span><span data-i18n="Cut End">Cut End</span></div>
+      <div class="sidebar-item" onclick="app.addNode('cutrange')"><span class="dot" style="background:#c0392b"></span><span data-i18n="Cut Range">Cut Range</span></div>
+      <div class="sidebar-item" onclick="app.addNode('keeprange')"><span class="dot" style="background:#27ae60"></span><span data-i18n="Keep Range">Keep Range</span></div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title" data-i18n="流程控制">流程控制</div>
+      <div class="sidebar-item" onclick="app.addNode('splitter')"><span class="dot" style="background:#f39c12"></span><span data-i18n="分流器">分流器</span></div>
+      <div class="sidebar-item" onclick="app.addNode('switch')"><span class="dot" style="background:#f1c40f"></span><span data-i18n="开关">开关</span></div>
+      <div class="sidebar-item" onclick="app.addNode('multiplexer')"><span class="dot" style="background:#17a2b8"></span><span data-i18n="多路选择器">多路选择器</span></div>
+      <div class="sidebar-item" onclick="app.addNode('argselector')"><span class="dot" style="background:#e67e22"></span><span data-i18n="比较选择器">比较选择器</span></div>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title" data-i18n="辅助">辅助</div>
+      <div class="sidebar-item" onclick="app.addNode('custom')"><span class="dot" style="background:#27ae60"></span><span data-i18n="自定义节点">自定义节点</span></div>
+      <div class="sidebar-item" onclick="app.addNode('note')"><span class="dot" style="background:#c9a227"></span><span data-i18n="便签">便签</span></div>
+    </div>
+    <div class="sidebar-actions">
+      <button onclick="app.loadDemo()"><span data-i18n="📊 演示数据">📊 演示数据</span></button>
+      <button onclick="app.clearAll()"><span data-i18n="🗑 清空画布">🗑 清空画布</span></button>
+      <button onclick="app.exportProject()"><span data-i18n="💾 导出 JSON">💾 导出 JSON</span></button>
+      <button onclick="document.getElementById('importJson').click()"><span data-i18n="📂 导入 JSON">📂 导入 JSON</span></button>
+      <input type="file" id="importJson" accept=".json" style="display:none" onchange="app.importProject(event)">
+      <button onclick="window.open('https://github.com/createskyblue/signal-analysis-lab','_blank')" data-i18n-title="GitHub 仓库" title="GitHub 仓库">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:middle;margin-right:4px"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg> GitHub
+      </button>
+    </div>
+  </div>
+  <div class="canvas-panel" id="canvasPanel">
+    <canvas class="grid-canvas" id="gridCanvas"></canvas>
+    <svg class="connections-svg" id="connectionsSvg"></svg>
+    <div class="viewport" id="viewport">
+    </div>
+    <div class="canvas-focus-crosshair" id="canvasFocusCrosshair" aria-hidden="true"><div class="canvas-focus-crosshair-h"></div><div class="canvas-focus-crosshair-v"></div></div>
+    <div class="empty-hint" id="emptyHint">从左侧栏拖拽节点到画布<br>从输出端口 (右侧圆点) 拖拽到输入端口 (左侧圆点) 连线<br>画布空白处左键拖拽框选，拖动已选节点可整体移动<br>点击连线变红后再点删除 / 右键直接删除<br>按 Delete 键删除选中节点 / F5 运行<br>鼠标中键拖拽平移视图 / 空格键复位<br><br>点击左下角「演示数据」可快速体验</div>
+  </div>
+  <div class="divider" id="divider"></div>
+  <div class="chart-panel" id="chartPanel">
+    <div class="chart-header">
+      <span data-i18n="波形显示">波形显示</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button class="run-btn" onclick="app.copyContext()" title="复制项目上下文到剪贴板，可粘贴到外部 AI 分析"><span data-i18n="📋 复制上下文">📋 复制上下文</span></button>
+        <div class="auto-run-wrap" id="autoRunWrap">
+          <button class="run-btn auto-btn" id="autoRunBtn" onclick="app.toggleAutoRun()">⏱</button>
+          <input type="number" class="auto-interval" id="autoInterval" value="2" min="0.1" step="0.1" title="刷新间隔(秒)">
+          <span data-i18n="秒" style="font-size:11px;color:#aaa;">秒</span>
+          <div class="auto-bar-track"><div class="auto-bar-fill" id="autoBarFill"></div></div>
+        </div>
+        <label class="export-toggle"><input type="checkbox" id="autoExportCsv" onchange="app.scheduleSave()"><span data-i18n="自动导出">自动导出</span></label>
+        <button class="run-btn" id="langToggle" onclick="I18N.setLocale(I18N.locale==='zh'?'en':'zh');window.app.rebuildAll();" title="Switch language">EN</button>
+        <button class="run-btn" onclick="app.run()"><span data-i18n="▶ 运行 (F5)">▶ 运行 (F5)</span></button>
+      </div>
+    </div>
+    <div class="chart-scroll-wrap">
+      <div class="chart-scroll" id="chartScroll">
+        <div style="text-align:center;color:#444;padding:40px 0;font-size:13px;" id="chartEmpty"><span data-i18n="运行后在此显示波形">运行后在此显示波形</span></div>
+      </div>
+      <div class="chart-scrollbar" id="chartScrollbar"><div class="chart-scrollbar-thumb" id="chartScrollbarThumb"></div></div>
+    </div>
+  </div>
+</body>
+</html>
