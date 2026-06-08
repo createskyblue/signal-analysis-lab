@@ -133,6 +133,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; user-select: none; -we
 .node-splitter { --node-color: #d7ba7d; }
 .node-switch { --node-color: var(--vscode-warning); }
 .node-multiplexer { --node-color: #4ec9b0; }
+.node-argselector { --node-color: #e67e22; }
 .node-weightedmixer { --node-color: #d7ba7d; }
 .node-multiplier { --node-color: #3794ff; }
 .node-adder { --node-color: var(--vscode-success); }
@@ -314,6 +315,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; user-select: none; -we
       <div class="sidebar-item" onclick="app.addNode('splitter')"><span class="dot" style="background:#f39c12"></span>分流器</div>
       <div class="sidebar-item" onclick="app.addNode('switch')"><span class="dot" style="background:#f1c40f"></span>开关</div>
       <div class="sidebar-item" onclick="app.addNode('multiplexer')"><span class="dot" style="background:#17a2b8"></span>多路选择器</div>
+      <div class="sidebar-item" onclick="app.addNode('argselector')"><span class="dot" style="background:#e67e22"></span>比较选择器</div>
     </div>
     <div class="sidebar-group">
       <div class="sidebar-group-title">辅助</div>
@@ -973,6 +975,19 @@ const NODE_DEFS = {
       { id: '_info', label: '', type: 'info', default: '多路信号按各自权重逐点加权求和：out[i]=Σ(in_k[i]×w_k)。\n未设置的权重默认为 1。可用于混合多路信号或实现软切换。' }
     ]
   },
+  argselector: {
+    type: 'argselector', title: '比较选择器',
+    inputs: [
+      { id: 'sig1', label: '信号1' }, { id: 'cmp1', label: '比较1' },
+      { id: 'sig2', label: '信号2' }, { id: 'cmp2', label: '比较2' }
+    ],
+    outputs: [{ id: 'out', label: '输出' }],
+    params: [
+      { id: 'count', label: '输入组数', type: 'number', default: 2, affectsPorts: true },
+      { id: 'mode', label: '比较模式', type: 'select', options: ['最大值', '最小值'], default: '最大值' },
+      { id: '_info', label: '', type: 'info', default: '<strong>每组两个输入：</strong>信号（被选择的数据）和比较信号（选择依据）。\n在每个时间点，比较所有组的比较信号，选出最大/最小值所在的那一组，输出该组的信号值。\n<strong>示例：</strong>组1信号=[1,2,3] 比较=[5,1,8]，组2信号=[4,5,6] 比较=[3,9,2]\n模式=最大值 → 比较值 [5,3]→组1胜, [1,9]→组2胜, [8,2]→组1胜 → 输出 [1,5,3]' }
+    ]
+  },
   cutbeg: {
     type: 'cutbeg', title: 'Cut Beg',
     inputs: [{ id: 'in', label: '输入' }],
@@ -1352,7 +1367,7 @@ class App {
     for (const nd of bp.nodes) {
       const def = NODE_DEFS[nd.type];
       if (!def) continue;
-      const node = { id: nd.id, type: nd.type, def, x: nd.x, y: nd.y, params: {}, _data: null, el: null };
+      const node = { id: nd.id, type: nd.type, def, x: nd.x, y: nd.y, params: {}, _data: null, _label: nd.label || null, el: null };
       def.params.forEach(p => { node.params[p.id] = nd.params[p.id] !== undefined ? this.cloneParamValue(nd.params[p.id]) : this.cloneParamValue(p.default); });
       this.applyLegacyParamMigration(node, nd.params);
       if (nd.data) node._data = nd.data;
@@ -1762,7 +1777,7 @@ class App {
     const id = this.getNextNodeId();
     if (x === undefined) x = 60 + (this.nodes.length % 5) * 50;
     if (y === undefined) y = 80 + Math.floor(this.nodes.length / 5) * 40;
-    const node = { id, type, def, x, y, params: {}, _data: null, el: null };
+    const node = { id, type, def, x, y, params: {}, _data: null, _label: null, el: null };
     def.params.forEach(p => { node.params[p.id] = this.cloneParamValue(p.default); });
     this.nodes.push(node);
     this.renderNode(node);
@@ -1807,6 +1822,10 @@ class App {
 
   getWeightedMixerInputCount(node) {
     return Math.max(1, Math.min(12, Math.floor(node.params.count || 2)));
+  }
+
+  getArgSelectorGroupCount(node) {
+    return Math.max(2, Math.min(8, Math.floor(node.params.count || 2)));
   }
 
   getCustomInputCount(node) {
@@ -1864,6 +1883,15 @@ class App {
       const count = this.getWeightedMixerInputCount(node);
       return Array.from({ length: count }, (_, i) => ({ id: `in${i + 1}`, label: `输入${i + 1}` }));
     }
+    if (node.type === 'argselector') {
+      const count = this.getArgSelectorGroupCount(node);
+      const ports = [];
+      for (let i = 1; i <= count; i++) {
+        ports.push({ id: `sig${i}`, label: `信号${i}` });
+        ports.push({ id: `cmp${i}`, label: `比较${i}` });
+      }
+      return ports;
+    }
     return node.def.inputs;
   }
 
@@ -1883,6 +1911,9 @@ class App {
     if (node.type === 'multiplexer') {
       const count = this.getMultiplexerPortCount(node);
       if (this.getMultiplexerMode(node) === '一入多出') return Array.from({ length: count }, (_, i) => ({ id: `out${i + 1}`, label: `输出${i + 1}` }));
+      return [{ id: 'out', label: '输出' }];
+    }
+    if (node.type === 'argselector') {
       return [{ id: 'out', label: '输出' }];
     }
     if (node.type === 'peakdetector') {
@@ -1962,7 +1993,13 @@ class App {
     header.className = 'node-header';
     const title = document.createElement('span');
     title.className = 'node-title';
+    title.title = '双击重命名';
     title.innerHTML = this.getNodeTitle(node).replace(/ (#\d+)$/, ' <span style="opacity:0.55;font-weight:400;font-size:10px">$1</span>');
+    title.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      this.startTitleEdit(node, title);
+    });
     header.appendChild(title);
     el.appendChild(header);
 
@@ -1992,6 +2029,7 @@ class App {
     }
 
     def.params.forEach(p => {
+      if (p.id === 'name' || p.id === 'note') return; // 改用双击标题重命名
       const label = document.createElement('label');
       label.textContent = p.label;
       this.markParamControl(label, p);
@@ -2215,7 +2253,7 @@ class App {
 
     // Drag
     header.addEventListener('mousedown', (e) => {
-      if (e.target.tagName === 'BUTTON') return;
+      if (e.target.tagName === 'BUTTON' || e.target.closest('.node-title-input')) return;
       e.preventDefault();
       if (e.ctrlKey || e.metaKey) {
         this.toggleNodeSelection(node.id);
@@ -2503,7 +2541,9 @@ class App {
 
   getNodeTitle(node) {
     const id = `#${node.id}`;
+    if (node._label) return `${node._label} ${id}`;
     if (node.type === 'input' && node.params.note) return `${node.def.title} - ${node.params.note} ${id}`;
+    if (node.type === 'probe' && node.params.name) return `${node.def.title} - ${node.params.name} ${id}`;
     if (node.type === 'csvoutput' && node.params.name) return `${node.def.title} - ${node.params.name} ${id}`;
     if (node.type === 'custom' && node.params.name) return `${node.params.name} ${id}`;
     return `${node.def.title} ${id}`;
@@ -2513,6 +2553,40 @@ class App {
     if (!node.el) return;
     const title = node.el.querySelector('.node-title');
     if (title) title.innerHTML = this.getNodeTitle(node).replace(/ (#\d+)$/, ' <span style="opacity:0.55;font-weight:400;font-size:10px">$1</span>');
+  }
+
+  startTitleEdit(node, titleEl) {
+    const currentLabel = node._label || node.params.note || node.params.name || node.def.title;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'node-title-input';
+    input.value = currentLabel;
+    input.style.cssText = 'width:100%;background:var(--vscode-input);color:var(--vscode-text);border:1px solid var(--vscode-accent);border-radius:2px;padding:1px 4px;font-size:12px;font-weight:600;outline:none;';
+    titleEl.innerHTML = '';
+    titleEl.appendChild(input);
+    input.focus();
+    input.select();
+
+    const commit = () => {
+      const val = input.value.trim();
+      if (val && val !== node.def.title) {
+        node._label = val;
+      } else if (val === node.def.title || val === '') {
+        node._label = null;
+      }
+      this.updateNodeTitle(node);
+      this.scheduleSave();
+    };
+
+    const cancel = () => {
+      this.updateNodeTitle(node);
+    };
+
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    });
   }
 
   updatePortPositions(node) {
@@ -2804,7 +2878,7 @@ class App {
   }
 
   downloadCsvOutput(node, data) {
-    const name = node.params.name || `CSV输出_${node.id}`;
+    const name = node._label || node.params.name || `CSV输出_${node.id}`;
     const timestamp = this.formatTimestamp();
     const sampleRate = this.sampleRate || 0;
     const csv = this.toCsvRows(data);
@@ -2845,13 +2919,13 @@ class App {
     const nSplitter = this.addNode('splitter', 340, 300);
 
     const nProbeRaw = this.addNode('probe', 620, 60);
-    nProbeRaw.params.name = '原始信号';
+    nProbeRaw._label = '原始信号';
 
     const nProbeFiltered = this.addNode('probe', 620, 200);
-    nProbeFiltered.params.name = '低通滤波后';
+    nProbeFiltered._label = '低通滤波后';
 
     const nProbeHigh = this.addNode('probe', 620, 350);
-    nProbeHigh.params.name = '高通滤波后';
+    nProbeHigh._label = '高通滤波后';
 
     const nHighpass = this.addNode('highpass', 60, 300);
     nHighpass.params.cutoff = 80;
@@ -3266,6 +3340,35 @@ class App {
         outputs['out'] = out;
         break;
       }
+      case 'argselector': {
+        const count = this.getArgSelectorGroupCount(node);
+        const mode = node.params.mode || '最大值';
+        const sigs = [];
+        const cmps = [];
+        let len = Infinity;
+        for (let i = 1; i <= count; i++) {
+          const sig = this.getUpstreamData(node, `sig${i}`);
+          const cmp = this.getUpstreamData(node, `cmp${i}`);
+          sigs.push(sig);
+          cmps.push(cmp);
+          if (cmp.length > 0 && cmp.length < len) len = cmp.length;
+        }
+        if (len === Infinity || len === 0) { outputs['out'] = []; break; }
+        const out = [];
+        for (let t = 0; t < len; t++) {
+          let bestIdx = -1;
+          let bestVal = mode === '最大值' ? -Infinity : Infinity;
+          for (let i = 0; i < count; i++) {
+            if (cmps[i].length === 0) continue;
+            const val = cmps[i][t] !== undefined ? cmps[i][t] : (mode === '最大值' ? -Infinity : Infinity);
+            const better = mode === '最大值' ? val > bestVal : val < bestVal;
+            if (better) { bestVal = val; bestIdx = i; }
+          }
+          out.push(bestIdx >= 0 ? (sigs[bestIdx][t] !== undefined ? sigs[bestIdx][t] : 0) : 0);
+        }
+        outputs['out'] = out;
+        break;
+      }
       case 'multiplier': {
         const a = this.getUpstreamData(node, 'a');
         const b = this.getUpstreamData(node, 'b');
@@ -3617,7 +3720,7 @@ class App {
         if (this.isInputBlocked(node, 'in')) break;
         const enabled = node.params.enabled !== false;
         if (!enabled) break;
-        const name = node.params.name || `示波器 #${node.id}`;
+        const name = node._label || node.params.name || `示波器 #${node.id}`;
         const color = node.params.color || this.randomColor();
         this.probeData.set(node.id, { title: name, data: inp, color, nodeId: node.id, axis: this.getSignalAxis(inp) });
         break;
@@ -3837,7 +3940,7 @@ class App {
   }
 
   getInputChartTitle(node) {
-    return node.params.note ? `输入信号 - ${node.params.note}` : `输入信号 #${node.id}`;
+    return node._label ? `输入信号 - ${node._label}` : (node.params.note ? `输入信号 - ${node.params.note}` : `输入信号 #${node.id}`);
   }
 
   getInputChartColor(index) {
@@ -3890,6 +3993,8 @@ class App {
     const name = document.createElement('span');
     name.className = 'chart-item-name';
     name.textContent = `${title} (${data.length} 点)`;
+    name.title = '点击切换显示/隐藏';
+    name.style.cursor = 'pointer';
     label.appendChild(name);
     const toggle = document.createElement('button');
     toggle.type = 'button';
@@ -3908,10 +4013,9 @@ class App {
     item.appendChild(canvas);
     const chartItem = { title, data, color, canvas, nodeId, axis, readout, item, toggle, visibilityKey, visible: resolvedVisible };
     item.classList.toggle('collapsed', !resolvedVisible);
-    toggle.onclick = (e) => {
-      e.stopPropagation();
-      this.setChartItemVisible(chartItem, !chartItem.visible);
-    };
+    const doToggle = () => this.setChartItemVisible(chartItem, !chartItem.visible);
+    toggle.onclick = (e) => { e.stopPropagation(); doToggle(); };
+    name.onclick = (e) => { e.stopPropagation(); doToggle(); };
 
     // Drag reorder
     item.addEventListener('dragstart', (e) => {
@@ -4354,7 +4458,8 @@ class App {
         x: n.x,
         y: n.y,
         params: { ...n.params },
-        data: n._data || null
+        data: n._data || null,
+        label: n._label || null
       })),
       connections: this.connections.map(c => ({ ...c }))
     };
@@ -4399,7 +4504,7 @@ class App {
     for (const nd of json.nodes) {
       const def = NODE_DEFS[nd.type];
       if (!def) continue;
-      const node = { id: nd.id, type: nd.type, def, x: nd.x, y: nd.y, params: {}, _data: null, el: null };
+      const node = { id: nd.id, type: nd.type, def, x: nd.x, y: nd.y, params: {}, _data: null, _label: nd.label || null, el: null };
       def.params.forEach(p => { node.params[p.id] = nd.params[p.id] !== undefined ? this.cloneParamValue(nd.params[p.id]) : this.cloneParamValue(p.default); });
       this.applyLegacyParamMigration(node, nd.params);
       if (nd.data) node._data = nd.data;
@@ -4458,7 +4563,8 @@ class App {
         type: n.type,
         x: n.x,
         y: n.y,
-        params: n.params
+        params: n.params,
+        label: n.label || null
       })),
       connections: raw.connections
     };
