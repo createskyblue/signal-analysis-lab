@@ -2186,29 +2186,33 @@ class App {
       const sources = this.nodes.filter(isSource);
       if (sources.length === 0) { this.toast('请先添加输入节点、信号发生器或开始节点', 'error'); return; }
 
-      // BFS from valid sources to find all reachable nodes
+      // BFS from valid sources: builds both reachable set AND topological run order
       const reachable = new Set();
+      const runOrder = [];
       const queue = [...sources.map(n => n.id)];
       while (queue.length) {
         const id = queue.shift();
         if (reachable.has(id)) continue;
         reachable.add(id);
+        runOrder.push(id);
         for (const conn of this.connections) {
           if (conn.fromNode === id) queue.push(conn.toNode);
         }
       }
 
-      // Only execute reachable nodes; cache empty for the rest
-      const runList = this.nodes.filter(n => reachable.has(n.id));
-      const totalNodes = Math.max(1, runList.length);
-      let completed = 0;
+      // Cache unreachable nodes; execute reachable ones in BFS order
+      // (topological order ensures upstream is already cached when downstream runs)
       for (const node of this.nodes) {
-        if (!reachable.has(node.id)) { this.nodeCache.set(node.id, {}); continue; }
+        if (!reachable.has(node.id)) { this.nodeCache.set(node.id, {}); }
+      }
+      const totalNodes = Math.max(1, runOrder.length);
+      for (let i = 0; i < runOrder.length; i++) {
+        const node = this.nodes.find(n => n.id === runOrder[i]);
+        if (!node) continue;
         const isCustom = node.type === 'custom';
-        this.updateRunProgress(completed, totalNodes, isCustom ? `等待 ${this.getNodeTitle(node)}` : `正在运行 ${this.getNodeTitle(node)}`);
+        this.updateRunProgress(i, totalNodes, isCustom ? `等待 ${this.getNodeTitle(node)}` : `正在运行 ${this.getNodeTitle(node)}`);
         await this.nextFrame();
         await this.executeNode(node, runOptions);
-        completed++;
         if (cancelSignal.aborted) break;
       }
       this.updateRunProgress(totalNodes, totalNodes, '生成图表');
