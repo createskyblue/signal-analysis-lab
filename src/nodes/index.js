@@ -2,6 +2,7 @@
 //  Node Registry — imports all official nodes
 // ============================================================
 import * as input from './input.js';
+import * as start from './start.js';
 import * as signalgen from './signalgen.js';
 import * as csvoutput from './csvoutput.js';
 import * as probe from './probe.js';
@@ -51,7 +52,7 @@ import * as peakdetector from './peakdetector.js';
 
 // Sidebar order by category
 export const ALL_NODES = [
-  input, signalgen, csvoutput, probe,
+  input, start, signalgen, csvoutput, probe,
   lowpass, highpass, bandpass, weighted, firlinear, madfilter, kalman,
   fft,
   multiplier, adder, subtractor, inverter, _abs, logmultiplier, normalizer, limiter, phaseshifter, hysteresis, dcoffset, differentiator,

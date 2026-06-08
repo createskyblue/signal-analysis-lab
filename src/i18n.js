@@ -51,7 +51,7 @@ const I18N_EN = {
   '等待 {0}': 'Waiting {0}',
   '自定义节点错误: {0}': 'Custom node error: {0}',
   '对数乘法器 #{0} 符号异常': 'Log multiplier #{0} sign anomaly',
-  '请先添加 CSV 输入节点': 'Please add a CSV input node first',
+  '请先添加输入节点、信号发生器或开始节点': 'Please add an input, signal generator, or start node',
   '运行完成': 'Run complete',
   '上下文已复制到剪贴板': 'Context copied to clipboard',
   '复制失败，请重试': 'Copy failed, please retry',

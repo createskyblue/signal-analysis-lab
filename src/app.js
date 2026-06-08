@@ -1979,6 +1979,9 @@ class App {
     if (node.type === 'input') {
       this.sampleRate = node.params.samplerate || 1000;
       outputs['out'] = node._data ? [...node._data] : [];
+    } else if (node.type === 'start') {
+      this.sampleRate = node.params.samplerate || 500;
+      Object.assign(outputs, proc(getInput, node.params, ctx));
     } else if (node.type === 'custom') {
       const customInputs = this.getNodeInputs(node).reduce((map, port) => {
         map[port.id] = this.getUpstreamData(node, port.id);
@@ -2178,15 +2181,34 @@ class App {
       this.nodeCache.clear();
       this.sampleRate = 1000;
 
-      const inputNodes = this.nodes.filter(n => n.type === 'input');
-      if (inputNodes.length === 0) { this.toast('请先添加 CSV 输入节点', 'error'); return; }
+      // Valid source types: input (CSV), signalgen (signal generator), start (when enabled)
+      const isSource = (n) => n.type === 'input' || n.type === 'signalgen' || (n.type === 'start' && n.params.enabled !== false);
+      const sources = this.nodes.filter(isSource);
+      if (sources.length === 0) { this.toast('请先添加输入节点、信号发生器或开始节点', 'error'); return; }
 
-      const totalNodes = Math.max(1, this.nodes.length);
-      for (const [index, node] of this.nodes.entries()) {
+      // BFS from valid sources to find all reachable nodes
+      const reachable = new Set();
+      const queue = [...sources.map(n => n.id)];
+      while (queue.length) {
+        const id = queue.shift();
+        if (reachable.has(id)) continue;
+        reachable.add(id);
+        for (const conn of this.connections) {
+          if (conn.fromNode === id) queue.push(conn.toNode);
+        }
+      }
+
+      // Only execute reachable nodes; cache empty for the rest
+      const runList = this.nodes.filter(n => reachable.has(n.id));
+      const totalNodes = Math.max(1, runList.length);
+      let completed = 0;
+      for (const node of this.nodes) {
+        if (!reachable.has(node.id)) { this.nodeCache.set(node.id, {}); continue; }
         const isCustom = node.type === 'custom';
-        this.updateRunProgress(index, totalNodes, isCustom ? `等待 ${this.getNodeTitle(node)}` : `正在运行 ${this.getNodeTitle(node)}`);
+        this.updateRunProgress(completed, totalNodes, isCustom ? `等待 ${this.getNodeTitle(node)}` : `正在运行 ${this.getNodeTitle(node)}`);
         await this.nextFrame();
         await this.executeNode(node, runOptions);
+        completed++;
         if (cancelSignal.aborted) break;
       }
       this.updateRunProgress(totalNodes, totalNodes, '生成图表');
