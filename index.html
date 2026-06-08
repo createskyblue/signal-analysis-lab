@@ -693,7 +693,12 @@ const DSP = {
     let held = 0;
     for (const raw of intervals) {
       const v = Number(raw);
-      if (sr > 0 && Number.isFinite(v) && v > 0) held = 60 * sr / v;
+      if (sr > 0 && Number.isFinite(v) && v > 0) {
+        held = 60 * sr / v;
+      } else if (v === 0) {
+        held = 0;
+      }
+      // v < 0 or NaN: keep previous held value
       out.push(held);
     }
     return out;
@@ -985,7 +990,11 @@ const NODE_DEFS = {
     params: [
       { id: 'count', label: '输入组数', type: 'number', default: 2, affectsPorts: true },
       { id: 'mode', label: '比较模式', type: 'select', options: ['最大值', '最小值'], default: '最大值' },
-      { id: '_info', label: '', type: 'info', default: '<strong>每组两个输入：</strong>信号（被选择的数据）和比较信号（选择依据）。\n在每个时间点，比较所有组的比较信号，选出最大/最小值所在的那一组，输出该组的信号值。\n<strong>示例：</strong>组1信号=[1,2,3] 比较=[5,1,8]，组2信号=[4,5,6] 比较=[3,9,2]\n模式=最大值 → 比较值 [5,3]→组1胜, [1,9]→组2胜, [8,2]→组1胜 → 输出 [1,5,3]' }
+      { id: 'fallbackEnabled', label: '启用异常值输出', type: 'checkbox', default: false },
+      { id: 'fallbackMode', label: '异常条件', type: 'select', options: ['大于阈值', '小于阈值'], default: '大于阈值' },
+      { id: 'fallbackThreshold', label: '阈值', type: 'number', default: 0 },
+      { id: 'fallbackValue', label: '异常值', type: 'number', default: 0 },
+      { id: '_info', label: '', type: 'info', default: '<strong>每组两个输入：</strong>信号（被选择的数据）和比较信号（选择依据）。\n在每个时间点，比较所有组的比较信号，选出最大/最小值所在的那一组，输出该组的信号值。\n<strong>异常值输出（可选）：</strong>当优胜比较值大于/小于设定阈值时，不输出信号值，改为输出用户指定的异常值（如 0）。用于标记比较信号异常的时刻。\n<strong>示例：</strong>组1信号=[1,2,3] 比较=[5,1,8]，组2信号=[4,5,6] 比较=[3,9,2]\n模式=最大值 → 比较值 [5,3]→组1胜, [1,9]→组2胜, [8,2]→组1胜 → 输出 [1,5,3]' }
     ]
   },
   cutbeg: {
@@ -1252,7 +1261,7 @@ const NODE_DEFS = {
     inputs: [{ id: 'in', label: '间隔输入' }],
     outputs: [{ id: 'out', label: 'BPM' }],
     params: [
-      { id: '_info', label: '', type: 'info', default: 'BPM = 60 × 采样率 / 间隔点数。输入为 0/负数/NaN 时保持上一有效值。' }
+      { id: '_info', label: '', type: 'info', default: 'BPM = 60 × 采样率 / 间隔点数。输入为 0 时输出 0；输入为负数/NaN 时保持上一有效值。' }
     ]
   },
   peakdetector: {
@@ -3357,6 +3366,10 @@ class App {
         }
         if (len === Infinity || len === 0) { outputs['out'] = []; break; }
         const out = [];
+        const fallbackOn = node.params.fallbackEnabled === true;
+        const fallbackMode = node.params.fallbackMode || '大于阈值';
+        const fallbackThr = node.params.fallbackThreshold !== undefined ? Number(node.params.fallbackThreshold) : 0;
+        const fallbackVal = node.params.fallbackValue !== undefined ? Number(node.params.fallbackValue) : 0;
         for (let t = 0; t < len; t++) {
           let bestIdx = -1;
           let bestVal = mode === '最大值' ? -Infinity : Infinity;
@@ -3366,7 +3379,14 @@ class App {
             const better = mode === '最大值' ? val > bestVal : val < bestVal;
             if (better) { bestVal = val; bestIdx = i; }
           }
-          out.push(bestIdx >= 0 ? (sigs[bestIdx][t] !== undefined ? sigs[bestIdx][t] : 0) : 0);
+          if (bestIdx < 0) { out.push(0); continue; }
+          const sigVal = sigs[bestIdx][t] !== undefined ? sigs[bestIdx][t] : 0;
+          if (fallbackOn) {
+            const triggered = fallbackMode === '小于阈值' ? bestVal < fallbackThr : bestVal > fallbackThr;
+            out.push(triggered ? fallbackVal : sigVal);
+          } else {
+            out.push(sigVal);
+          }
         }
         outputs['out'] = out;
         break;
