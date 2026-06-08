@@ -3,3 +3,5 @@
 260604A_信号在线仿真.zip
 滤波器实验箱_*.json
 tests/
+node_modules/
+dist/
