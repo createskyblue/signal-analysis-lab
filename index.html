@@ -1648,8 +1648,10 @@ class App {
         app.selectNodes([]);
         return;
       }
-      // Ctrl+A select all nodes
+      // Ctrl+A select all nodes (only when not editing text)
       if (e.code === 'KeyA' && (e.ctrlKey || e.metaKey)) {
+        const el = document.activeElement;
+        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.closest('.cm-editor'))) return;
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
