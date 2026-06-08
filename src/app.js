@@ -1,5 +1,4 @@
-import { DSP } from './dsp.js';
-import { NODE_DEFS, state } from './nodes.js';
+import { NODE_DEFS, NODE_PROCESS, ALL_NODES, state } from './nodes/index.js';
 import { I18N } from './i18n.js';
 
 class App {
@@ -48,9 +47,9 @@ class App {
     this.initDivider();
     this.initChartScrollbar();
     this.initEvents();
-    this.initSidebarDrag();
     this.resize();
     this.drawGrid();
+    this.renderSidebar();
 
     window.addEventListener('resize', () => { this.resize(); this.updateChartScrollbar(); });
   }
@@ -432,26 +431,7 @@ class App {
     });
   }
 
-  initSidebarDrag() {
-    document.querySelectorAll('.sidebar-item[onclick^="app.addNode"]').forEach(item => {
-      const match = item.getAttribute('onclick').match(/app\.addNode\('([^']+)'\)/);
-      if (!match) return;
-      const type = match[1];
-      item.draggable = true;
-      item.dataset.nodeType = type;
-      item.onclick = null;
-      item.removeAttribute('onclick');
-      item.addEventListener('dragstart', (e) => {
-        this.sidebarDragType = type;
-        e.dataTransfer.effectAllowed = 'copy';
-        e.dataTransfer.setData('application/x-node-type', type);
-        e.dataTransfer.setData('text/plain', NODE_DEFS[type]?.title || type);
-      });
-      item.addEventListener('dragend', () => {
-        this.sidebarDragType = null;
-      });
-    });
-  }
+  // initSidebarDrag removed — sidebar is now dynamically rendered by renderSidebar()
 
   // ---- Viewport Transform ----
   applyViewportTransform() {
@@ -511,6 +491,56 @@ class App {
     this.updateEmptyHint();
     this.scheduleSave();
     return node;
+  }
+
+  renderSidebar() {
+    const container = document.getElementById('sidebarContent');
+    if (!container) return;
+    container.innerHTML = '';
+
+    let currentCategory = null;
+    let groupEl = null;
+
+    for (const mod of ALL_NODES) {
+      const d = mod.def;
+      const cat = I18N.tn(d.category, d.categoryEn);
+
+      // New category group
+      if (cat !== currentCategory) {
+        currentCategory = cat;
+        groupEl = document.createElement('div');
+        groupEl.className = 'sidebar-group';
+        const titleEl = document.createElement('div');
+        titleEl.className = 'sidebar-group-title';
+        titleEl.textContent = cat;
+        groupEl.appendChild(titleEl);
+        container.appendChild(groupEl);
+      }
+
+      const item = document.createElement('div');
+      item.className = 'sidebar-item';
+      item.setAttribute('data-node-type', d.type);
+      item.draggable = true;
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = d.color || '#999';
+      item.appendChild(dot);
+      const label = document.createElement('span');
+      label.textContent = I18N.tn(d.sidebar || d.title, d.sidebarEn || d.titleEn);
+      item.appendChild(label);
+
+      // Click to add node
+      item.addEventListener('click', () => this.addNode(d.type));
+
+      // Drag to add node
+      item.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('application/x-node-type', d.type);
+        this.sidebarDragType = d.type;
+      });
+      item.addEventListener('dragend', () => { this.sidebarDragType = null; });
+
+      groupEl.appendChild(item);
+    }
   }
 
   getNextNodeId() {
@@ -1560,6 +1590,8 @@ class App {
     this.renderConnections();
     // Rebuild charts
     this.redrawCharts();
+    // Rebuild sidebar
+    this.renderSidebar();
     // Update DOM translations
     I18N.updateDOM();
     this.updateEmptyHint();
@@ -1920,36 +1952,6 @@ class App {
     return out;
   }
 
-  normalizeGlobal(input) {
-    let min = Infinity, max = -Infinity;
-    for (const v of input) { if (v < min) min = v; if (v > max) max = v; }
-    const range = max - min;
-    return range === 0 ? input.map(() => 0) : input.map(v => 2 * (v - min) / range - 1);
-  }
-
-  normalizeWindow(input, windowSize) {
-    return input.map((v, i) => {
-      const start = Math.max(0, i - windowSize + 1);
-      let min = Infinity, max = -Infinity;
-      for (let j = start; j <= i; j++) {
-        const item = input[j];
-        if (item < min) min = item;
-        if (item > max) max = item;
-      }
-      const range = max - min;
-      return range === 0 ? 0 : 2 * (v - min) / range - 1;
-    });
-  }
-
-  getNormalizerMode(node) {
-    return node.params.mode === '窗口' ? '窗口' : '全部';
-  }
-
-  getOddTapCount(value) {
-    const taps = Math.max(3, Math.floor(value || 3));
-    return taps % 2 === 0 ? taps + 1 : taps;
-  }
-
   async executeNode(node, runOptions = {}) {
     if (this.nodeCache.has(node.id)) return;
     // Execute upstream first
@@ -1961,551 +1963,74 @@ class App {
     }
 
     const outputs = {};
-    switch (node.type) {
-      case 'input':
-        this.sampleRate = node.params.samplerate || 1000;
-        outputs['out'] = node._data ? [...node._data] : [];
-        break;
 
-      case 'signalgen': {
-        const ref = this.getUpstreamData(node, 'len');
-        const length = ref.length || Math.max(0, Math.floor(node.params.length || 0));
-        const frequency = node.params.frequency !== undefined ? node.params.frequency : 10;
-        const high = node.params.high !== undefined ? node.params.high : 1;
-        const low = node.params.low !== undefined ? node.params.low : -1;
-        outputs['out'] = DSP.generateSineWave(length, frequency, high, low, this.sampleRate);
-        break;
-      }
+    const proc = NODE_PROCESS[node.type];
+    if (!proc) { this.nodeCache.set(node.id, outputs); return; }
 
-      case 'lowpass': {
-        const inp = this.getUpstreamData(node, 'in');
-        const order = Math.max(1, Math.min(8, Math.floor(node.params.order || 2)));
-        outputs['out'] = inp.length ? DSP.lowpass(inp, node.params.cutoff || 50, this.sampleRate, order) : [];
-        break;
-      }
-      case 'highpass': {
-        const inp = this.getUpstreamData(node, 'in');
-        const order = Math.max(1, Math.min(8, Math.floor(node.params.order || 2)));
-        outputs['out'] = inp.length ? DSP.highpass(inp, node.params.cutoff || 50, this.sampleRate, order) : [];
-        break;
-      }
-      case 'bandpass': {
-        const inp = this.getUpstreamData(node, 'in');
-        const order = Math.max(1, Math.min(8, Math.floor(node.params.order || 2)));
-        outputs['out'] = inp.length ? DSP.bandpass(inp, node.params.lowcut || 30, node.params.highcut || 100, this.sampleRate, order) : [];
-        break;
-      }
-      case 'weighted': {
-        const inp = this.getUpstreamData(node, 'in');
-        const alpha = node.params.alpha !== undefined ? node.params.alpha : 0.1;
-        const a = Math.max(0, Math.min(1, alpha));
-        const out = [];
-        if (inp.length) {
-          out.push(inp[0]);
-          for (let i = 1; i < inp.length; i++) {
-            out.push(a * inp[i] + (1 - a) * out[i - 1]);
-          }
-        }
-        outputs['out'] = out;
-        break;
-      }
-      case 'firlinear': {
-        const inp = this.getUpstreamData(node, 'in');
-        const taps = this.getOddTapCount(node.params.taps || 31);
-        const cutoff = node.params.cutoff || 50;
-        const coeffs = DSP.firLinearLowpassCoefficients(cutoff, this.sampleRate, taps);
-        outputs['out'] = inp.length ? DSP.firFilter(inp, coeffs) : [];
-        break;
-      }
-      case 'madfilter': {
-        const inp = this.getUpstreamData(node, 'in');
-        const windowSize = Math.max(1, Math.floor(node.params.size || 1));
-        const threshold = node.params.threshold !== undefined ? node.params.threshold : 3;
-        const scale = node.params.scale !== undefined ? node.params.scale : 1.4826;
-        const result = inp.length ? DSP.hampelMadFilter(inp, windowSize, threshold, scale) : { filtered: [], mad: [] };
-        outputs['out'] = result.filtered;
-        outputs['mad'] = result.mad;
-        break;
-      }
-      case 'fft': {
-        const inp = this.getUpstreamData(node, 'in');
-        outputs['out'] = inp.length ? DSP.fftMagnitudeSpectrum(inp, this.sampleRate, node.params.size || 1024, node.params.minFreq, node.params.maxFreq) : [];
-        break;
-      }
-      case 'custom': {
-        const inputs = this.getNodeInputs(node).reduce((map, port) => {
-          map[port.id] = this.getUpstreamData(node, port.id);
-          return map;
-        }, {});
-        const customOutputs = this.getNodeOutputs(node);
-        const signal = inputs.in || [];
-        const sleep = (ms) => this._sleep(ms);
-        const aborted = () => this._cancelToken?.signal.aborted ?? false;
-        try {
-          const code = node.params.code || 'return signal;';
-          const fn = new Function('signal', 'sampleRate', 'inputs', 'sleep', 'aborted', `return (async () => {\n${code}\n})();`);
-          const result = await fn(signal, this.sampleRate, inputs, sleep, aborted);
-          if (result instanceof Promise) throw new Error('自定义节点返回值不能是 Promise——请确保 return 的是数组或对象，不是未 await 的 Promise');
-          if (Array.isArray(result)) {
-            outputs[customOutputs[0].id] = result;
-            for (const port of customOutputs.slice(1)) outputs[port.id] = [];
-          } else if (result && typeof result === 'object') {
-            for (const port of customOutputs) outputs[port.id] = Array.isArray(result[port.id]) ? result[port.id] : [];
-          } else {
-            for (const port of customOutputs) outputs[port.id] = [];
-          }
-        } catch (err) {
-          if (err?.name === 'AbortError' || (this._cancelToken && this._cancelToken.signal.aborted)) {
-            this.toast('已取消', 'info');
-          } else {
-            console.error('Custom node error:', err);
-            this.toast(`自定义节点错误: ${err.message}`, 'error');
-          }
+    const getInput = (pid) => this.getUpstreamData(node, pid);
+    const ctx = { sampleRate: this.sampleRate };
+    if (node.type === 'custom') {
+      ctx.sleep = (ms) => this._sleep(ms);
+      ctx.aborted = () => this._cancelToken?.signal.aborted ?? false;
+    }
+
+    // ---- Special nodes with side effects handled in app.js ----
+
+    if (node.type === 'input') {
+      this.sampleRate = node.params.samplerate || 1000;
+      outputs['out'] = node._data ? [...node._data] : [];
+    } else if (node.type === 'custom') {
+      const customInputs = this.getNodeInputs(node).reduce((map, port) => {
+        map[port.id] = this.getUpstreamData(node, port.id);
+        return map;
+      }, {});
+      const customOutputs = this.getNodeOutputs(node);
+      const signal = customInputs.in || [];
+      try {
+        const code = node.params.code || 'return signal;';
+        const fn = new Function('signal', 'sampleRate', 'inputs', 'sleep', 'aborted', `return (async () => {\n${code}\n})();`);
+        const result = await fn(signal, this.sampleRate, customInputs, ctx.sleep, ctx.aborted);
+        if (result instanceof Promise) throw new Error('自定义节点返回值不能是 Promise——请确保 return 的是数组或对象，不是未 await 的 Promise');
+        if (Array.isArray(result)) {
+          outputs[customOutputs[0].id] = result;
+          for (const port of customOutputs.slice(1)) outputs[port.id] = [];
+        } else if (result && typeof result === 'object') {
+          for (const port of customOutputs) outputs[port.id] = Array.isArray(result[port.id]) ? result[port.id] : [];
+        } else {
           for (const port of customOutputs) outputs[port.id] = [];
         }
-        break;
-      }
-      case 'splitter': {
-        const inp = this.getUpstreamData(node, 'in');
-        const count = this.getSplitterOutputCount(node);
-        for (let i = 1; i <= count; i++) outputs[`out${i}`] = [...inp];
-        break;
-      }
-      case 'switch': {
-        const count = this.getSwitchPortCount(node);
-        for (let i = 1; i <= count; i++) {
-          const inPort = count === 1 ? 'in' : `in${i}`;
-          const outPort = count === 1 ? 'out' : `out${i}`;
-          const inp = this.getUpstreamData(node, inPort);
-          outputs[outPort] = node.params.enabled === false ? [] : [...inp];
-        }
-        break;
-      }
-      case 'multiplexer': {
-        const count = this.getMultiplexerPortCount(node);
-        const selectedRoute = this.getMultiplexerSelectedRoute(node);
-        if (this.getMultiplexerMode(node) === '一入多出') {
-          const inp = this.getUpstreamData(node, 'in');
-          for (let i = 1; i <= count; i++) outputs[`out${i}`] = this.isMultiplexerRouteEnabled(node, i) ? [...inp] : [];
+      } catch (err) {
+        if (err?.name === 'AbortError' || (this._cancelToken && this._cancelToken.signal.aborted)) {
+          this.toast('已取消', 'info');
         } else {
-          outputs['out'] = [...this.getUpstreamData(node, `in${selectedRoute}`)];
+          console.error('Custom node error:', err);
+          this.toast(`自定义节点错误: ${err.message}`, 'error');
         }
-        break;
+        for (const port of customOutputs) outputs[port.id] = [];
       }
-      case 'weightedmixer': {
-        const inputs = this.getNodeInputs(node).map(port => this.getUpstreamData(node, port.id));
-        const weights = node.params.weights || {};
-        const len = inputs.reduce((max, data) => Math.max(max, data.length), 0);
-        const out = [];
-        for (let i = 0; i < len; i++) {
-          let sum = 0;
-          inputs.forEach((data, index) => {
-            const portId = `in${index + 1}`;
-            const rawWeight = weights[portId] !== undefined ? Number(weights[portId]) : 1;
-            const weight = Number.isFinite(rawWeight) ? rawWeight : 0;
-            sum += (data[i] !== undefined ? data[i] : 0) * weight;
-          });
-          out.push(sum);
-        }
-        outputs['out'] = out;
-        break;
+    } else if (node.type === 'csvoutput') {
+      if (this.shouldExportCsvNode(node, runOptions)) {
+        this.downloadCsvOutput(node, getInput('in'));
       }
-      case 'argselector': {
-        const count = this.getArgSelectorGroupCount(node);
-        const mode = node.params.mode || '最大值';
-        const sigs = [];
-        const cmps = [];
-        let len = Infinity;
-        for (let i = 1; i <= count; i++) {
-          const sig = this.getUpstreamData(node, `sig${i}`);
-          const cmp = this.getUpstreamData(node, `cmp${i}`);
-          sigs.push(sig);
-          cmps.push(cmp);
-          if (cmp.length > 0 && cmp.length < len) len = cmp.length;
-        }
-        if (len === Infinity || len === 0) { outputs['out'] = []; break; }
-        const out = [];
-        const fallbackOn = node.params.fallbackEnabled === true;
-        const fallbackMode = node.params.fallbackMode || '大于阈值';
-        const fallbackThr = node.params.fallbackThreshold !== undefined ? Number(node.params.fallbackThreshold) : 0;
-        const fallbackVal = node.params.fallbackValue !== undefined ? Number(node.params.fallbackValue) : 0;
-        for (let t = 0; t < len; t++) {
-          let bestIdx = -1;
-          let bestVal = mode === '最大值' ? -Infinity : Infinity;
-          for (let i = 0; i < count; i++) {
-            if (cmps[i].length === 0) continue;
-            const val = cmps[i][t] !== undefined ? cmps[i][t] : (mode === '最大值' ? -Infinity : Infinity);
-            const better = mode === '最大值' ? val > bestVal : val < bestVal;
-            if (better) { bestVal = val; bestIdx = i; }
-          }
-          if (bestIdx < 0) { out.push(0); continue; }
-          const sigVal = sigs[bestIdx][t] !== undefined ? sigs[bestIdx][t] : 0;
-          if (fallbackOn) {
-            const triggered = fallbackMode === '小于阈值' ? bestVal < fallbackThr : bestVal > fallbackThr;
-            out.push(triggered ? fallbackVal : sigVal);
-          } else {
-            out.push(sigVal);
-          }
-        }
-        outputs['out'] = out;
-        break;
+    } else if (node.type === 'logmultiplier') {
+      const inp = this.getUpstreamData(node, 'in');
+      const procOut = proc(getInput, node.params, ctx);
+      const signFlip = procOut.out && procOut.out.some((v, i) => inp[i] !== 0 && v !== 0 && Math.sign(v) !== Math.sign(inp[i]));
+      if (signFlip) {
+        console.error('Log multiplier sign flip', { nodeId: node.id });
+        this.toast(`对数乘法器 #${node.id} 符号异常`, 'error');
       }
-      case 'multiplier': {
-        const a = this.getUpstreamData(node, 'a');
-        const b = this.getUpstreamData(node, 'b');
-        const defaultB = node.params.value !== undefined ? node.params.value : 2;
-        const len = a.length;
-        const out = [];
-        for (let i = 0; i < len; i++) out.push((a[i] || 0) * (b.length > 0 && b[i] !== undefined ? b[i] : defaultB));
-        outputs['out'] = out;
-        break;
-      }
-      case 'adder': {
-        const a = this.getUpstreamData(node, 'a');
-        const b = this.getUpstreamData(node, 'b');
-        const defaultB = node.params.value !== undefined ? node.params.value : 0;
-        const len = a.length;
-        const out = [];
-        for (let i = 0; i < len; i++) out.push((a[i] || 0) + (b.length > 0 && b[i] !== undefined ? b[i] : defaultB));
-        outputs['out'] = out;
-        break;
-      }
-      case 'subtractor': {
-        const a = this.getUpstreamData(node, 'a');
-        const b = this.getUpstreamData(node, 'b');
-        const defaultB = node.params.value !== undefined ? node.params.value : 0;
-        const len = a.length;
-        const out = [];
-        for (let i = 0; i < len; i++) out.push((a[i] || 0) - (b.length > 0 && b[i] !== undefined ? b[i] : defaultB));
-        outputs['out'] = out;
-        break;
-      }
-      case 'inverter': {
-        const inp = this.getUpstreamData(node, 'in');
-        outputs['out'] = inp.map(v => -v);
-        break;
-      }
-      case 'normalizer': {
-        const inp = this.getUpstreamData(node, 'in');
-        if (!inp.length) { outputs['out'] = []; break; }
-        const windowSize = Math.max(1, Math.floor(node.params.window || 1));
-        outputs['out'] = this.getNormalizerMode(node) === '窗口' ? this.normalizeWindow(inp, windowSize) : this.normalizeGlobal(inp);
-        break;
-      }
-      case 'cutbeg': {
-        const inp = this.getUpstreamData(node, 'in');
-        const pct = Math.max(0, Math.min(100, node.params.percent || 0));
-        const count = Math.floor(inp.length * pct / 100);
-        const mode = node.params.mode || '裁剪';
-        if (mode === '裁剪') {
-          outputs['out'] = inp.slice(count);
-        } else {
-          outputs['out'] = inp.map((v, i) => i < count ? 0 : v);
-        }
-        break;
-      }
-      case 'cutend': {
-        const inp = this.getUpstreamData(node, 'in');
-        const pct = Math.max(0, Math.min(100, node.params.percent || 0));
-        const count = Math.floor(inp.length * pct / 100);
-        const mode = node.params.mode || '裁剪';
-        if (mode === '裁剪') {
-          outputs['out'] = inp.slice(0, inp.length - count);
-        } else {
-          const start = inp.length - count;
-          outputs['out'] = inp.map((v, i) => i >= start ? 0 : v);
-        }
-        break;
-      }
-      case 'cutrange': {
-        const inp = this.getUpstreamData(node, 'in');
-        const startPct = Math.max(0, Math.min(100, node.params.start || 0));
-        const endPct = Math.max(0, Math.min(100, node.params.end || 100));
-        const startIdx = Math.floor(inp.length * startPct / 100);
-        const endIdx = Math.floor(inp.length * endPct / 100);
-        const mode = node.params.mode || '裁剪';
-        if (mode === '裁剪') {
-          outputs['out'] = [...inp.slice(0, startIdx), ...inp.slice(endIdx)];
-        } else {
-          outputs['out'] = inp.map((v, i) => (i >= startIdx && i < endIdx) ? 0 : v);
-        }
-        break;
-      }
-      case 'keeprange': {
-        const inp = this.getUpstreamData(node, 'in');
-        const startPct = Math.max(0, Math.min(100, node.params.start || 0));
-        const endPct = Math.max(0, Math.min(100, node.params.end || 100));
-        const startIdx = Math.floor(inp.length * startPct / 100);
-        const endIdx = Math.floor(inp.length * endPct / 100);
-        const mode = node.params.mode || '裁剪';
-        if (mode === '裁剪') {
-          outputs['out'] = inp.slice(startIdx, endIdx);
-        } else {
-          outputs['out'] = inp.map((v, i) => (i >= startIdx && i < endIdx) ? v : 0);
-        }
-        break;
-      }
-      case 'avgwin': {
-        const inp = this.getUpstreamData(node, 'in');
-        const winSize = Math.max(1, Math.floor(node.params.size || 5));
-        const half = Math.floor(winSize / 2);
-        const out = [];
-        for (let i = 0; i < inp.length; i++) {
-          let sum = 0, cnt = 0;
-          for (let j = -half; j <= half; j++) {
-            const idx = i + j;
-            if (idx >= 0 && idx < inp.length) { sum += inp[idx]; cnt++; }
-          }
-          out.push(sum / cnt);
-        }
-        outputs['out'] = out;
-        break;
-      }
-      case 'avgpool': {
-        const inp = this.getUpstreamData(node, 'in');
-        const poolSize = Math.max(1, Math.floor(node.params.size || 4));
-        const out = [];
-        for (let i = 0; i < inp.length; i += poolSize) {
-          let sum = 0, cnt = 0;
-          for (let j = 0; j < poolSize && i + j < inp.length; j++) { sum += inp[i + j]; cnt++; }
-          out.push(sum / cnt);
-        }
-        outputs['out'] = out;
-        break;
-      }
-      case 'maxpool': {
-        const inp = this.getUpstreamData(node, 'in');
-        const poolSize = Math.max(1, Math.floor(node.params.size || 4));
-        const out = [];
-        for (let i = 0; i < inp.length; i += poolSize) {
-          let max = -Infinity;
-          for (let j = 0; j < poolSize && i + j < inp.length; j++) { if (inp[i + j] > max) max = inp[i + j]; }
-          out.push(max);
-        }
-        outputs['out'] = out;
-        break;
-      }
-      case 'limiter': {
-        const inp = this.getUpstreamData(node, 'in');
-        const lo = node.params.min !== undefined ? node.params.min : -1;
-        const hi = node.params.max !== undefined ? node.params.max : 1;
-        outputs['out'] = inp.map(v => Math.max(lo, Math.min(hi, v)));
-        break;
-      }
-      case 'phaseshifter': {
-        const inp = this.getUpstreamData(node, 'in');
-        const shift = Math.floor(node.params.shift || 0);
-        if (shift === 0) {
-          outputs['out'] = [...inp];
-        } else if (shift > 0) {
-          // Right shift: pad with zeros at start
-          outputs['out'] = [...new Array(shift).fill(0), ...inp.slice(0, inp.length - shift)];
-        } else {
-          // Left shift: pad with zeros at end
-          const s = -shift;
-          outputs['out'] = [...inp.slice(s), ...new Array(s).fill(0)];
-        }
-        break;
-      }
-      case 'logmultiplier': {
-        const inp = this.getUpstreamData(node, 'in');
-        if (!inp.length) { outputs['out'] = []; break; }
-        let maxAbs = 0;
-        for (const v of inp) { const a = Math.abs(v); if (a > maxAbs) maxAbs = a; }
-        if (maxAbs === 0) { outputs['out'] = [...inp]; break; }
-        const logMax = Math.log1p(maxAbs);
-        const out = inp.map(v => Math.sign(v) * Math.abs(v) * Math.log1p(Math.abs(v)) / logMax);
-        const signFlip = out.some((v, i) => inp[i] !== 0 && v !== 0 && Math.sign(v) !== Math.sign(inp[i]));
-        if (signFlip) {
-          console.error('Log multiplier sign flip', { nodeId: node.id, input: inp, output: out });
-          this.toast(`对数乘法器 #${node.id} 符号异常`, 'error');
-        }
-        outputs['out'] = out;
-        break;
-      }
-      case 'entropy': {
-        const inp = this.getUpstreamData(node, 'in');
-        const windowSize = Math.max(1, Math.floor(node.params.window || 1));
-        const bins = Math.max(1, Math.floor(node.params.bins || 1));
-        outputs['out'] = inp.length ? DSP.causalWindowEntropy(inp, windowSize, bins) : [];
-        break;
-      }
-      case 'squarewave': {
-        const inp = this.getUpstreamData(node, 'in');
-        const windowSize = Math.max(2, Math.floor(node.params.window || 2));
-        const thresholdMode = node.params.thresholdMode || '自动';
-        const threshold = node.params.threshold !== undefined ? node.params.threshold : 0;
-        const minEdges = Math.max(2, Math.floor(node.params.minEdges || 2));
-        const metrics = inp.length ? DSP.causalSquareWaveMetrics(inp, windowSize, thresholdMode, threshold, minEdges) : { score: [], period: [], duty: [], jitter: [] };
-        outputs['score'] = metrics.score;
-        outputs['period'] = metrics.period;
-        outputs['duty'] = metrics.duty;
-        outputs['jitter'] = metrics.jitter;
-        break;
-      }
-      case 'abs': {
-        const inp = this.getUpstreamData(node, 'in');
-        outputs['out'] = inp.map(v => Math.abs(v));
-        break;
-      }
-      case 'hysteresis': {
-        const a = this.getUpstreamData(node, 'a');
-        const b = this.getUpstreamData(node, 'b');
-        const defaultThresh = node.params.threshold !== undefined ? node.params.threshold : 0.5;
-        const hyst = Math.max(0, node.params.hyst !== undefined ? node.params.hyst : 0.1);
-        const out = [];
-        let state = 0;
-        for (let i = 0; i < a.length; i++) {
-          const v = a[i] || 0;
-          const t = (b.length > 0 && b[i] !== undefined) ? b[i] : defaultThresh;
-          if (hyst === 0) {
-            state = v > t ? 1 : 0;
-          } else {
-            if (state === 0 && v > t + hyst) state = 1;
-            else if (state === 1 && v < t - hyst) state = 0;
-          }
-          out.push(state);
-        }
-        outputs['out'] = out;
-        break;
-      }
-      case 'kalman': {
-        const inp = this.getUpstreamData(node, 'in');
-        const Q = node.params.q !== undefined ? node.params.q : 0.01;
-        const R = node.params.r !== undefined ? node.params.r : 0.1;
-        const out = [];
-        let x_est = inp.length > 0 ? inp[0] : 0; // initial estimate
-        let p_est = 1; // initial error covariance
-        for (const z of inp) {
-          // Predict
-          const x_pred = x_est;
-          const p_pred = p_est + Q;
-          // Update
-          const K = p_pred / (p_pred + R);
-          x_est = x_pred + K * (z - x_pred);
-          p_est = (1 - K) * p_pred;
-          out.push(x_est);
-        }
-        outputs['out'] = out;
-        break;
-      }
-      case 'dcoffset': {
-        const inp = this.getUpstreamData(node, 'in');
-        outputs['out'] = inp.length ? DSP.dcOffset(inp) : [];
-        break;
-      }
-      case 'differentiator': {
-        const inp = this.getUpstreamData(node, 'in');
-        outputs['out'] = inp.length ? DSP.differentiator(inp) : [];
-        break;
-      }
-      case 'stdwin': {
-        const inp = this.getUpstreamData(node, 'in');
-        const size = Math.max(2, Math.floor(node.params.size || 16));
-        outputs['out'] = inp.length ? DSP.slidingStdDev(inp, size) : [];
-        break;
-      }
-      case 'interval2bpm': {
-        const inp = this.getUpstreamData(node, 'in');
-        outputs['out'] = inp.length ? DSP.intervalToBpm(inp, this.sampleRate) : [];
-        break;
-      }
-      case 'peakdetector': {
-        const signal = this.getUpstreamData(node, 'in');
-        const trigger = this.getUpstreamData(node, 'in2');
-        const outNames = ['out','out2','out3','out4','out5','out6','out7','out8','out9','out10'];
-        if (signal.length) {
-          const result = DSP.peakValleyDetector(signal, trigger);
-          for (const name of outNames) outputs[name] = result[name];
-        } else {
-          for (const name of outNames) outputs[name] = [];
-        }
-        break;
-      }
-      case 'medianwin': {
-        const inp = this.getUpstreamData(node, 'in');
-        const winSize = Math.max(1, Math.floor(node.params.size || 5));
-        const half = Math.floor(winSize / 2);
-        const out = [];
-        for (let i = 0; i < inp.length; i++) {
-          const window = [];
-          for (let j = -half; j <= half; j++) {
-            const idx = i + j;
-            if (idx >= 0 && idx < inp.length) window.push(inp[idx]);
-          }
-          window.sort((a, b) => a - b);
-          out.push(window[Math.floor(window.length / 2)]);
-        }
-        outputs['out'] = out;
-        break;
-      }
-      case 'maxwin': {
-        const inp = this.getUpstreamData(node, 'in');
-        const winSize = Math.max(1, Math.floor(node.params.size || 5));
-        const half = Math.floor(winSize / 2);
-        const out = [];
-        for (let i = 0; i < inp.length; i++) {
-          let max = -Infinity;
-          for (let j = -half; j <= half; j++) {
-            const idx = i + j;
-            if (idx >= 0 && idx < inp.length && inp[idx] > max) max = inp[idx];
-          }
-          out.push(max);
-        }
-        outputs['out'] = out;
-        break;
-      }
-      case 'minwin': {
-        const inp = this.getUpstreamData(node, 'in');
-        const winSize = Math.max(1, Math.floor(node.params.size || 5));
-        const half = Math.floor(winSize / 2);
-        const out = [];
-        for (let i = 0; i < inp.length; i++) {
-          let min = Infinity;
-          for (let j = -half; j <= half; j++) {
-            const idx = i + j;
-            if (idx >= 0 && idx < inp.length && inp[idx] < min) min = inp[idx];
-          }
-          out.push(min);
-        }
-        outputs['out'] = out;
-        break;
-      }
-      case 'extremewin': {
-        const inp = this.getUpstreamData(node, 'in');
-        const winSize = Math.max(1, Math.floor(node.params.size || 5));
-        const half = Math.floor(winSize / 2);
-        const out = [];
-        for (let i = 0; i < inp.length; i++) {
-          let extreme = 0, maxAbs = 0;
-          for (let j = -half; j <= half; j++) {
-            const idx = i + j;
-            if (idx >= 0 && idx < inp.length) {
-              const a = Math.abs(inp[idx]);
-              if (a > maxAbs) { maxAbs = a; extreme = inp[idx]; }
-            }
-          }
-          out.push(extreme);
-        }
-        outputs['out'] = out;
-        break;
-      }
-      case 'csvoutput': {
-        const inp = this.getUpstreamData(node, 'in');
-        if (this.shouldExportCsvNode(node, runOptions)) this.downloadCsvOutput(node, inp);
-        break;
-      }
-      case 'probe': {
-        const inp = this.getUpstreamData(node, 'in');
-        outputs['out'] = [...inp];
-        if (this.isInputBlocked(node, 'in')) break;
-        const enabled = node.params.enabled !== false;
-        if (!enabled) break;
+      Object.assign(outputs, procOut);
+    } else if (node.type === 'probe') {
+      const procOut = proc(getInput, node.params, ctx);
+      outputs['out'] = procOut.out || [];
+      if (!this.isInputBlocked(node, 'in') && node.params.enabled !== false) {
         const name = node._label || node.params.name || `示波器 #${node.id}`;
         const color = node.params.color || this.randomColor();
-        this.probeData.set(node.id, { title: name, data: inp, color, nodeId: node.id, axis: this.getSignalAxis(inp) });
-        break;
+        this.probeData.set(node.id, { title: name, data: outputs['out'], color, nodeId: node.id, axis: this.getSignalAxis(outputs['out']) });
       }
+    } else {
+      Object.assign(outputs, proc(getInput, node.params, ctx));
     }
 
     this.nodeCache.set(node.id, outputs);
