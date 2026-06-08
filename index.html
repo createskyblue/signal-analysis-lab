@@ -4389,7 +4389,7 @@ class App {
 
     // Cursor line
     if (this.cursorX >= 0 && this.cursorX <= dw) {
-      ctx.strokeStyle = 'rgba(233,69,96,0.7)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
       ctx.lineWidth = 1;
       ctx.setLineDash([3, 3]);
       ctx.beginPath();
@@ -4405,13 +4405,13 @@ class App {
       const v = data[idx] ?? 0;
       const x = this.getChartXValue(axis, idx, data.length);
       const y = dh - pad - ((v - min) / range) * (dh - 2 * pad);
-      ctx.fillStyle = '#e94560';
+      ctx.fillStyle = '#ffffff';
       ctx.beginPath();
       ctx.arc(this.cursorX, y, 4, 0, Math.PI * 2);
       ctx.fill();
 
       // Value label
-      ctx.fillStyle = '#e94560';
+      ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 10px sans-serif';
       ctx.textAlign = 'left';
       const labelX = this.cursorX + 8 > dw - 40 ? this.cursorX - 48 : this.cursorX + 8;
