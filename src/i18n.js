@@ -30,7 +30,7 @@ const I18N_EN = {
   '从左侧栏拖拽节点到画布': 'Drag nodes from the sidebar to the canvas',
   '从输出端口 (右侧圆点) 拖拽到输入端口 (左侧圆点) 连线': 'Drag from output port (right dot) to input port (left dot) to connect',
   '画布空白处左键拖拽框选，拖动已选节点可整体移动': 'Left-drag on empty canvas to box-select, drag selected nodes to move together',
-  '点击连线变红后再点删除 / 右键直接删除': 'Click a connection to mark it red, then click again to delete / right-click to delete directly',
+  '双击连线或右键直接删除，也可单击变红后再点删除': 'Double-click or right-click a connection to delete directly, or click once to mark it red and click again to delete',
   '按 Delete 键删除选中节点 / F5 运行': 'Press Delete to remove selected nodes / F5 to run',
   '鼠标中键拖拽平移视图 / 空格键复位': 'Middle-mouse drag to pan / Space to reset view',
   '点击左下角「演示数据」可快速体验': 'Click "Demo Data" in the sidebar for a quick start',

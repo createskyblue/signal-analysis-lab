@@ -2,6 +2,9 @@
 寻找峰峰值_数据样本_tmp/
 260604A_信号在线仿真.zip
 滤波器实验箱_*.json
-tests/
+tests/*
+!tests/connection_interactions.test.mjs
+!tests/demo.test.mjs
+!tests/signalgen.test.mjs
 node_modules/
 dist/

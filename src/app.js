@@ -1,5 +1,6 @@
 import { NODE_DEFS, NODE_PROCESS, ALL_NODES, state } from './nodes/index.js';
 import { I18N } from './i18n.js';
+import { createIqDemoBlueprint } from './demo.js';
 
 class App {
   constructor() {
@@ -1605,7 +1606,7 @@ class App {
       el.innerHTML = I18N.t('从左侧栏拖拽节点到画布') + '<br>' +
         I18N.t('从输出端口 (右侧圆点) 拖拽到输入端口 (左侧圆点) 连线') + '<br>' +
         I18N.t('画布空白处左键拖拽框选，拖动已选节点可整体移动') + '<br>' +
-        I18N.t('点击连线变红后再点删除 / 右键直接删除') + '<br>' +
+        I18N.t('双击连线或右键直接删除，也可单击变红后再点删除') + '<br>' +
         I18N.t('按 Delete 键删除选中节点 / F5 运行') + '<br>' +
         I18N.t('鼠标中键拖拽平移视图 / 空格键复位') + '<br><br>' +
         I18N.t('点击左下角「演示数据」可快速体验');
@@ -1695,51 +1696,32 @@ class App {
 
   // ---- Demo Data ----
   loadDemo() {
-    // Generate demo: sine + noise + high freq component
-    const sr = 1000;
-    const n = 2000;
-    const data = [];
-    for (let i = 0; i < n; i++) {
-      const t = i / sr;
-      const signal = Math.sin(2 * Math.PI * 5 * t) * 2.0;       // 5 Hz base
-      const noise = (Math.random() - 0.5) * 1.5;                // noise
-      const hf = Math.sin(2 * Math.PI * 150 * t) * 0.8;         // 150 Hz component
-      data.push(signal + noise + hf);
+    const demo = createIqDemoBlueprint();
+    this.sampleRate = demo.sampleRate;
+    const nodeMap = new Map();
+
+    for (const item of demo.nodes) {
+      const node = this.addNode(item.type, item.x, item.y);
+      if (!node) continue;
+      if (item.params) {
+        Object.assign(node.params, Object.fromEntries(
+          Object.entries(item.params).map(([key, value]) => [key, this.cloneParamValue(value)])
+        ));
+      }
+      if (item.label) node._label = item.label;
+      if (node.def.params.some(p => p.affectsPorts)) this.refreshDynamicPortNode(node);
+      else this.refreshNodeControls(node);
+      this.updateNodeTitle(node);
+      nodeMap.set(item.key, node);
     }
 
-    // Create demo flow: Input -> Lowpass -> Probe (filtered)
-    //                   Input -> Probe (raw)
-    const nInput = this.addNode('input', 60, 100);
-    nInput._data = data;
-    nInput.params.samplerate = sr;
-    const fileLabel = document.getElementById(`fileLabel-${nInput.id}`);
-    if (fileLabel) fileLabel.textContent = 'demo_sine+noise.csv';
+    for (const conn of demo.connections) {
+      const from = nodeMap.get(conn.from);
+      const to = nodeMap.get(conn.to);
+      if (from && to) this.addConnection(from.id, conn.fromPort, to.id, conn.toPort);
+    }
 
-    const nLowpass = this.addNode('lowpass', 340, 100);
-    nLowpass.params.cutoff = 30;
-
-    const nSplitter = this.addNode('splitter', 340, 300);
-
-    const nProbeRaw = this.addNode('probe', 620, 60);
-    nProbeRaw._label = '原始信号';
-
-    const nProbeFiltered = this.addNode('probe', 620, 200);
-    nProbeFiltered._label = '低通滤波后';
-
-    const nProbeHigh = this.addNode('probe', 620, 350);
-    nProbeHigh._label = '高通滤波后';
-
-    const nHighpass = this.addNode('highpass', 60, 300);
-    nHighpass.params.cutoff = 80;
-
-    // Connect
-    this.addConnection(nInput.id, 'out', nLowpass.id, 'in');
-    this.addConnection(nInput.id, 'out', nProbeRaw.id, 'in');
-    this.addConnection(nLowpass.id, 'out', nProbeFiltered.id, 'in');
-    this.addConnection(nInput.id, 'out', nHighpass.id, 'in');
-    this.addConnection(nHighpass.id, 'out', nProbeHigh.id, 'in');
-
-    this.toast('已加载演示数据，点击「运行」查看波形', 'success');
+    this.toast('已加载 IQ 调制/解调 Demo，点击「运行」查看波形', 'success');
   }
 
   addConnection(fromNodeId, fromPortId, toNodeId, toPortId) {
@@ -1824,6 +1806,13 @@ class App {
     return `${conn.fromNode}:${conn.fromPort}->${conn.toNode}:${conn.toPort}`;
   }
 
+  removeConnection(conn) {
+    this.pushUndo();
+    this.connections = this.connections.filter(c => c !== conn);
+    this.renderConnections();
+    this.scheduleSave();
+  }
+
   getBlockedOutgoingConnections(node, incomingConn) {
     if (!node) return [];
     if (node.type === 'multiplexer') {
@@ -1881,24 +1870,25 @@ class App {
       hit.addEventListener('click', (e) => {
         e.stopPropagation();
         if (g.classList.contains('deleting')) {
-          this.pushUndo();
-          this.connections = this.connections.filter(c => c !== conn);
-          this.renderConnections();
-          this.scheduleSave();
+          this.removeConnection(conn);
         } else {
           g.classList.add('deleting');
           setTimeout(() => { if (g.parentNode) g.classList.remove('deleting'); }, 2000);
         }
       });
 
+      // Double-click to delete directly
+      hit.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.removeConnection(conn);
+      });
+
       // Right-click to delete directly
       hit.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        this.pushUndo();
-        this.connections = this.connections.filter(c => c !== conn);
-        this.renderConnections();
-        this.scheduleSave();
+        this.removeConnection(conn);
       });
 
       g.appendChild(line);
@@ -2941,4 +2931,3 @@ class App {
 }
 
 export default App;
-
