@@ -7,6 +7,7 @@ class App {
     this.nodes = [];
     this.connections = [];
     this.sampleRate = 1000;
+    this.variableValues = new Map();
     this.probeData = new Map();
     this.chartVisibility = new Map();
     this.nodeCache = new Map(); // nodeId -> { portId -> data[] }
@@ -560,6 +561,7 @@ class App {
     if (node.type === 'normalizer' && savedParams.global === false && node.params.mode === '全部') node.params.mode = '窗口';
     if (node.type === 'probe' && savedParams.visible !== undefined && savedParams.enabled === undefined) node.params.enabled = savedParams.visible !== false;
     if (node.type === 'weighted' && savedParams.weight !== undefined && savedParams.alpha === undefined) node.params.alpha = 1 - savedParams.weight;
+    if ((node.type === 'variable' || node.type === 'variabledisplay') && savedParams.name !== undefined && savedParams.variableName === undefined) node.params.variableName = savedParams.name;
   }
 
   getMultiplexerPortCount(node) {
@@ -973,6 +975,8 @@ class App {
         this.renderPortNameInputs(paramWrap, node, p);
       } else if (p.type === 'select') {
         this.renderParamSelect(paramWrap, node, p);
+      } else if (p.type === 'variableReadout') {
+        this.renderVariableReadout(paramWrap, node, p);
       } else if (p.type === 'info') {
         const div = document.createElement('div');
         div.style.cssText = 'font-size:10px;color:#888;padding:4px 0 6px;line-height:1.6;white-space:pre-line;word-break:break-all;overflow-wrap:break-word;max-width:220px;';
@@ -1083,6 +1087,34 @@ class App {
   markParamControl(control, p) {
     control.dataset.paramId = p.id;
     return control;
+  }
+
+  renderVariableReadout(container, node, p) {
+    const div = document.createElement('div');
+    div.className = 'variable-readout';
+    div.dataset.variableReadoutNodeId = String(node.id);
+    this.markParamControl(div, p);
+    div.style.cssText = 'font-size:11px;color:#ddd;background:#111923;border:1px solid #243447;border-radius:4px;padding:6px;line-height:1.5;white-space:pre-wrap;word-break:break-word;min-height:28px;max-width:220px;';
+    div.textContent = node.params[p.id] || '未运行';
+    container.appendChild(div);
+  }
+
+  formatVariableReadout(name, values = this.variableValues) {
+    const key = String(name || '').trim();
+    if (key) return values.has(key) ? String(values.get(key)) : '未定义';
+    if (!values.size) return '无变量';
+    return Array.from(values.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([entryName, value]) => `${entryName} = ${value}`)
+      .join('\n');
+  }
+
+  updateVariableDisplayNode(node, text = this.formatVariableReadout(node.params.variableName || node.params.name)) {
+    node.params.readout = text;
+    if (!node.el) return;
+    node.el.querySelectorAll('.variable-readout').forEach(el => {
+      el.textContent = text;
+    });
   }
 
   syncParamControlStates(node, body) {
@@ -1333,7 +1365,8 @@ class App {
     const title = I18N.tn(node.def.title, node.def.titleEn);
     if (node._label) return `${node._label} ${id}`;
     if (node.type === 'input' && node.params.note) return `${title} - ${node.params.note} ${id}`;
-    if (node.type === 'variable' && node.params.name) return `${title} - ${node.params.name} ${id}`;
+    if (node.type === 'variable' && (node.params.variableName || node.params.name)) return `${title} - ${node.params.variableName || node.params.name} ${id}`;
+    if (node.type === 'variabledisplay' && (node.params.variableName || node.params.name)) return `${title} - ${node.params.variableName || node.params.name} ${id}`;
     if (node.type === 'probe' && node.params.name) return `${title} - ${node.params.name} ${id}`;
     if (node.type === 'csvoutput' && node.params.name) return `${title} - ${node.params.name} ${id}`;
     if (node.type === 'custom' && node.params.name) return `${node.params.name} ${id}`;
@@ -1986,6 +2019,7 @@ class App {
 
     const getInput = (pid) => this.getUpstreamData(node, pid);
     const ctx = { sampleRate: this.sampleRate };
+    ctx.variables = this.variableValues;
     if (node.type === 'custom') {
       ctx.sleep = (ms) => this._sleep(ms);
       ctx.aborted = () => this._cancelToken?.signal.aborted ?? false;
@@ -2003,6 +2037,17 @@ class App {
       this.sampleRate = this.getNodeSampleRate(node, this.sampleRate || 1000);
       ctx.sampleRate = this.sampleRate;
       Object.assign(outputs, proc(getInput, node.params, ctx));
+    } else if (node.type === 'variable') {
+      Object.assign(outputs, proc(getInput, node.params, ctx));
+      const name = String(node.params.variableName || node.params.name || '').trim();
+      if (name) {
+        const value = Number(node.params.value);
+        this.variableValues.set(name, Number.isFinite(value) ? value : 0);
+      }
+    } else if (node.type === 'variabledisplay') {
+      const procOut = proc(getInput, node.params, ctx);
+      outputs['out'] = procOut.out || [];
+      this.updateVariableDisplayNode(node, procOut.readout);
     } else if (node.type === 'custom') {
       const customInputs = this.getNodeInputs(node).reduce((map, port) => {
         map[port.id] = this.getUpstreamData(node, port.id);
@@ -2012,8 +2057,8 @@ class App {
       const signal = customInputs.in || [];
       try {
         const code = node.params.code || 'return signal;';
-        const fn = new Function('signal', 'sampleRate', 'inputs', 'sleep', 'aborted', `return (async () => {\n${code}\n})();`);
-        const result = await fn(signal, this.sampleRate, customInputs, ctx.sleep, ctx.aborted);
+        const fn = new Function('signal', 'sampleRate', 'inputs', 'variables', 'sleep', 'aborted', `return (async () => {\n${code}\n})();`);
+        const result = await fn(signal, this.sampleRate, customInputs, Object.fromEntries(this.variableValues), ctx.sleep, ctx.aborted);
         if (result instanceof Promise) throw new Error('自定义节点返回值不能是 Promise——请确保 return 的是数组或对象，不是未 await 的 Promise');
         if (Array.isArray(result)) {
           outputs[customOutputs[0].id] = result;
@@ -2211,6 +2256,7 @@ class App {
       this.probeData.clear();
       this.nodeCache.clear();
       this.sampleRate = 1000;
+      this.variableValues = new Map();
 
       // Valid source types: input (CSV), signalgen (signal generator), variable, start (when enabled)
       const isSource = (n) => n.type === 'input' || n.type === 'signalgen' || n.type === 'variable' || (n.type === 'start' && n.params.enabled !== false);
@@ -3008,7 +3054,7 @@ class App {
       })),
       connections: raw.connections
     };
-    const text = `<信号分析实验室>\n用户正在使用「信号处理实验室」——一个基于浏览器的可视化信号处理工具。\n下面是用户的项目上下文，请基于此帮用户分析和处理问题。\n\n## 仓库地址\nhttps://github.com/createskyblue/signal-analysis-lab\n\n## 当前流程图\n\`\`\`json\n${JSON.stringify(slim, null, 2)}\n\`\`\`\n\n## 自定义节点 API\n代码运行在 async 函数体内，支持 await。\n\n可用变量：\n  signal    — number[], 第一个输入端口的数组\n  inputs    — { in, in2, ... }, 所有输入端口的对象\n  sampleRate — number, 采样率 (Hz)\n  sleep(ms) — async 函数, 暂停 ms（取消时抛 AbortError）\n  aborted() — 返回 boolean, 是否已取消执行\n\n返回值：\n  单输出 → return number[]\n  多输出 → return { out: number[], out2: number[], ... }\n  不要 return Promise 对象\n</信号分析实验室>`;
+    const text = `<信号分析实验室>\n用户正在使用「信号处理实验室」——一个基于浏览器的可视化信号处理工具。\n下面是用户的项目上下文，请基于此帮用户分析和处理问题。\n\n## 仓库地址\nhttps://github.com/createskyblue/signal-analysis-lab\n\n## 当前流程图\n\`\`\`json\n${JSON.stringify(slim, null, 2)}\n\`\`\`\n\n## 自定义节点 API\n代码运行在 async 函数体内，支持 await。\n\n可用变量：\n  signal    — number[], 第一个输入端口的数组\n  inputs    — { in, in2, ... }, 所有输入端口的对象\n  variables — { a, b, ... }, 当前管线变量表\n  sampleRate — number, 采样率 (Hz)\n  sleep(ms) — async 函数, 暂停 ms（取消时抛 AbortError）\n  aborted() — 返回 boolean, 是否已取消执行\n\n返回值：\n  单输出 → return number[]\n  多输出 → return { out: number[], out2: number[], ... }\n  不要 return Promise 对象\n</信号分析实验室>`;
     navigator.clipboard.writeText(text).then(() => {
       this.toast('上下文已复制到剪贴板', 'success');
     }).catch(() => {

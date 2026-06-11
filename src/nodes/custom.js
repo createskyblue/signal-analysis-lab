@@ -21,6 +21,7 @@ export const def = {
 '// 可用变量（已注入，直接使用）：\n' +
 '//   signal   — number[]，第一个输入端口的数组（兼容旧写法）\n' +
 '//   inputs   — object，所有输入端口的数组，如 inputs.in、inputs.in2、inputs.in3\n' +
+'//   variables — object，当前管线变量表，如 variables.a\n' +
 '//   sampleRate — number，采样率（Hz）\n' +
 '//   sleep(ms) — async 函数，暂停 ms 毫秒；用户按 ESC 或 F5 会抛出 AbortError 打断等待\n' +
 '//   aborted() — 返回 boolean，用户是否已取消本次执行（可在循环中轮询）\n' +

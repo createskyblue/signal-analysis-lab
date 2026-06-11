@@ -8,7 +8,7 @@ export const def = {
   inputs: [{ id: 'len', label: '长度参考', labelEn: 'Length Reference' }],
   outputs: [{ id: 'out', label: '输出', labelEn: 'Output' }],
   params: [
-    { id: 'name', label: '变量名', labelEn: 'Variable Name', type: 'text', default: 'var1' },
+    { id: 'variableName', label: '变量名', labelEn: 'Variable Name', type: 'text', default: 'var1' },
     { id: 'value', label: '数值', labelEn: 'Value', type: 'number', default: 0 }
   ]
 };

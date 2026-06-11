@@ -12,16 +12,16 @@ assert.equal(NODE_PROCESS.variable, variableProcess, 'variable node process shou
 assert.equal(variableDef.type, 'variable');
 assert.deepEqual(variableDef.inputs.map(input => input.id), ['len']);
 assert.deepEqual(variableDef.outputs.map(output => output.id), ['out']);
-assert.ok(variableDef.params.some(param => param.id === 'name'), 'variable node should expose a variable name');
+assert.ok(variableDef.params.some(param => param.id === 'variableName'), 'variable node should expose a visible variable name');
 assert.ok(variableDef.params.some(param => param.id === 'value'), 'variable node should expose a numeric value');
 
-const value = variableProcess(() => [], { name: 'gain', value: 2.5 }, { sampleRate: 1000 });
+const value = variableProcess(() => [], { variableName: 'gain', value: 2.5 }, { sampleRate: 1000 });
 assert.deepEqual(value, { out: [2.5] });
 
-const repeated = variableProcess(port => port === 'len' ? [1, 2, 3, 4] : [], { name: 'gain', value: 2.5 }, { sampleRate: 1000 });
+const repeated = variableProcess(port => port === 'len' ? [1, 2, 3, 4] : [], { variableName: 'gain', value: 2.5 }, { sampleRate: 1000 });
 assert.deepEqual(repeated, { out: [2.5, 2.5, 2.5, 2.5] });
 
-const invalid = variableProcess(() => [], { name: 'gain', value: 'not a number' }, { sampleRate: 1000 });
+const invalid = variableProcess(() => [], { variableName: 'gain', value: 'not a number' }, { sampleRate: 1000 });
 assert.deepEqual(invalid, { out: [0] });
 
 console.log('variable node tests passed');

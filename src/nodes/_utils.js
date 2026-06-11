@@ -9,3 +9,10 @@ export function median(values) {
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
+
+export function getSampleRate(params = {}, ctx = {}, fallback = 1000) {
+  const paramSampleRate = Number(params.samplerate);
+  if (paramSampleRate > 0) return paramSampleRate;
+  const ctxSampleRate = Number(ctx.sampleRate);
+  return ctxSampleRate > 0 ? ctxSampleRate : fallback;
+}

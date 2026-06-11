@@ -1,4 +1,6 @@
 // FFT Spectrum Node
+import { getSampleRate } from './_utils.js';
+
 export const def = {
   type: 'fft',
   title: 'FFT 频谱', titleEn: 'FFT Spectrum',
@@ -8,6 +10,7 @@ export const def = {
   inputs: [{ id: 'in', label: '输入', labelEn: 'Input' }],
   outputs: [{ id: 'out', label: '幅值谱', labelEn: 'Magnitude Spectrum' }],
   params: [
+    { id: 'samplerate', label: '采样率 (Hz)', labelEn: 'Sample Rate (Hz)', type: 'number', default: '', optional: true },
     { id: 'size', label: 'FFT 点数', labelEn: 'FFT Points', type: 'number', default: 1024 },
     { id: 'minFreq', label: '最小频率 (Hz)', labelEn: 'Min Freq (Hz)', type: 'number', default: '', optional: true, min: 0 },
     { id: 'maxFreq', label: '最大频率 (Hz)', labelEn: 'Max Freq (Hz)', type: 'number', default: '', optional: true, min: 0 },
@@ -58,7 +61,7 @@ export function process(getInput, params, ctx) {
   fftInPlace(re, im);
   const bins = Math.floor(n / 2) + 1;
   const out = [], freqs = [];
-  const sr = ctx.sampleRate;
+  const sr = getSampleRate(params, ctx);
   const min = params.minFreq === '' || params.minFreq === undefined ? 0 : Number(params.minFreq);
   const max = params.maxFreq === '' || params.maxFreq === undefined ? sr / 2 : Number(params.maxFreq);
   const lo = Math.max(0, Math.min(Number.isFinite(min) ? min : 0, sr / 2));

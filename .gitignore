@@ -4,10 +4,13 @@
 滤波器实验箱_*.json
 tests/*
 !tests/connection_interactions.test.mjs
+!tests/custom_variables.test.mjs
 !tests/demo.test.mjs
 !tests/param_visibility.test.mjs
 !tests/probe.test.mjs
+!tests/sample_rate_nodes.test.mjs
 !tests/signalgen.test.mjs
 !tests/variable_node.test.mjs
+!tests/variable_display.test.mjs
 node_modules/
 dist/
