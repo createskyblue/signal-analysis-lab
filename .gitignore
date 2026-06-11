@@ -12,5 +12,6 @@ tests/*
 !tests/signalgen.test.mjs
 !tests/variable_node.test.mjs
 !tests/variable_display.test.mjs
+!tests/chart_export.test.mjs
 node_modules/
 dist/

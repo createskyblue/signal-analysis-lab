@@ -11,6 +11,7 @@ class App {
     this.probeData = new Map();
     this.chartVisibility = new Map();
     this.nodeCache = new Map(); // nodeId -> { portId -> data[] }
+    this.lastSimulationTimestamp = null;
 
     this.canvasPanel = document.getElementById('canvasPanel');
     this.gridCanvas = document.getElementById('gridCanvas');
@@ -1735,6 +1736,31 @@ class App {
     return data.map(value => this.escapeCsvValue(value)).join('\n');
   }
 
+  buildChartCsvRows(chartItem) {
+    const data = Array.isArray(chartItem?.data) ? chartItem.data : [];
+    if (chartItem?.displayMode === 'X-Y') {
+      const xData = Array.isArray(chartItem.xData) ? chartItem.xData : [];
+      const rows = [];
+      const len = Math.min(xData.length, data.length);
+      for (let i = 0; i < len; i++) {
+        rows.push(`${this.escapeCsvValue(xData[i])},${this.escapeCsvValue(data[i])}`);
+      }
+      return rows.join('\n');
+    }
+
+    const axis = chartItem?.axis;
+    if (axis && Array.isArray(axis.values)) {
+      const rows = [];
+      const len = Math.min(axis.values.length, data.length);
+      for (let i = 0; i < len; i++) {
+        rows.push(`${this.escapeCsvValue(axis.values[i])},${this.escapeCsvValue(data[i])}`);
+      }
+      return rows.join('\n');
+    }
+
+    return this.toCsvRows(data);
+  }
+
   downloadCsvOutput(node, data) {
     const name = node._label || node.params.name || `CSV输出_${node.id}`;
     const timestamp = this.formatTimestamp();
@@ -1745,6 +1771,20 @@ class App {
     const a = document.createElement('a');
     a.href = url;
     a.download = `${this.sanitizeFileName(name)}_${timestamp}_${this.sanitizeFileName(`${sampleRate}Hz`)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  downloadChartItemCsv(chartItem) {
+    const simulationTimestamp = this.lastSimulationTimestamp || '未运行';
+    const exportTimestamp = this.formatTimestamp();
+    const name = chartItem?.title || 'waveform';
+    const csv = this.buildChartCsvRows(chartItem);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${this.sanitizeFileName(name)}_仿真_${simulationTimestamp}_导出_${exportTimestamp}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -2242,6 +2282,7 @@ class App {
       return;
     }
     this._isRunning = true;
+    this.lastSimulationTimestamp = this.formatTimestamp();
     this._cancelToken = new AbortController();
     const cancelSignal = this._cancelToken.signal; // capture locally to survive race with re-run
     const runOptions = {
@@ -2405,6 +2446,12 @@ class App {
     name.title = '点击切换显示/隐藏';
     name.style.cursor = 'pointer';
     label.appendChild(name);
+    const exportBtn = document.createElement('button');
+    exportBtn.type = 'button';
+    exportBtn.className = 'chart-export-button';
+    exportBtn.textContent = I18N.t('导出');
+    exportBtn.title = I18N.t('导出波形 CSV');
+    label.appendChild(exportBtn);
     const toggle = document.createElement('button');
     toggle.type = 'button';
     toggle.className = 'chart-visibility-toggle';
@@ -2420,9 +2467,10 @@ class App {
     canvas.style.display = resolvedVisible ? 'block' : 'none';
     readout.style.display = resolvedVisible ? '' : 'none';
     item.appendChild(canvas);
-    const chartItem = { title, data, xData, color, canvas, nodeId, axis, readout, item, toggle, visibilityKey, visible: resolvedVisible, displayMode };
+    const chartItem = { title, data, xData, color, canvas, nodeId, axis, readout, item, toggle, exportBtn, visibilityKey, visible: resolvedVisible, displayMode };
     item.classList.toggle('collapsed', !resolvedVisible);
     const doToggle = () => this.setChartItemVisible(chartItem, !chartItem.visible);
+    exportBtn.onclick = (e) => { e.stopPropagation(); this.downloadChartItemCsv(chartItem); };
     toggle.onclick = (e) => { e.stopPropagation(); doToggle(); };
     name.onclick = (e) => { e.stopPropagation(); doToggle(); };
 

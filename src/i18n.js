@@ -68,6 +68,8 @@ const I18N_EN = {
   '输入信号 #{0}': 'Input Signal #{0}',
   '频率': 'Frequency',
   '采样': 'Sample',
+  '导出': 'Export',
+  '导出波形 CSV': 'Export waveform CSV',
   '隐藏': 'Hide',
   '显示': 'Show',
   '隐藏波形': 'Hide waveform',
