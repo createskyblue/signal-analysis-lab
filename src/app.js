@@ -635,6 +635,12 @@ class App {
     if (node.type === 'custom') {
       return this.getCustomInputs(node);
     }
+    if (node.type === 'probe' && node.params.displayMode === 'X-Y') {
+      return [
+        { id: 'x', label: 'X输入', labelEn: 'X Input' },
+        { id: 'in', label: 'Y输入', labelEn: 'Y Input' }
+      ];
+    }
     if (node.type === 'switch') {
       const count = this.getSwitchPortCount(node);
       if (count === 1) return [{ id: 'in', label: '输入', labelEn: 'Input' }];
@@ -796,10 +802,14 @@ class App {
 
     def.params.forEach(p => {
       if (p.id === 'name' || p.id === 'note') return; // 改用双击标题重命名
+      const paramWrap = document.createElement('div');
+      paramWrap.className = 'param-field';
+      this.markParamControl(paramWrap, p);
+      body.appendChild(paramWrap);
       const label = document.createElement('label');
       label.textContent = I18N.tn(p.label, p.labelEn);
       this.markParamControl(label, p);
-      body.appendChild(label);
+      paramWrap.appendChild(label);
 
       if (p.type === 'file') {
         const upload = document.createElement('div');
@@ -814,12 +824,12 @@ class App {
         inp.onchange = (e) => this.handleFileUpload(node, e);
         upload.appendChild(btn);
         upload.appendChild(inp);
-        body.appendChild(upload);
+        paramWrap.appendChild(upload);
       } else if (p.type === 'code') {
         // CodeMirror-enhanced editor for custom node JS code
         const wrap = document.createElement('div');
         wrap.className = 'cm-wrap';
-        body.appendChild(wrap);
+        paramWrap.appendChild(wrap);
         // Fallback textarea (hidden when CM loads)
         const ta = document.createElement('textarea');
         ta.value = node.params[p.id];
@@ -876,14 +886,14 @@ class App {
           document.addEventListener('mousemove', onMove);
           document.addEventListener('mouseup', onUp);
         });
-        body.appendChild(handle);
+        paramWrap.appendChild(handle);
       } else if (p.type === 'noteText') {
         const ta = document.createElement('textarea');
         ta.value = node.params[p.id];
         ta.rows = 5;
         ta.spellcheck = false;
         ta.oninput = () => { node.params[p.id] = ta.value; this.scheduleSave(); };
-        body.appendChild(ta);
+        paramWrap.appendChild(ta);
         // Resize handle for note nodes
         const handle = document.createElement('div');
         handle.className = 'resize-handle';
@@ -912,7 +922,7 @@ class App {
           document.addEventListener('mousemove', onMove);
           document.addEventListener('mouseup', onUp);
         });
-        body.appendChild(handle);
+        paramWrap.appendChild(handle);
       } else if (p.type === 'number') {
         const inp = document.createElement('input');
         inp.type = 'number';
@@ -925,7 +935,7 @@ class App {
           if (p.affectsPorts) this.rerenderNode(node);
           this.scheduleSave();
         };
-        body.appendChild(inp);
+        paramWrap.appendChild(inp);
       } else if (p.type === 'color') {
         const inp = document.createElement('input');
         inp.type = 'color';
@@ -936,7 +946,7 @@ class App {
         inp.style.border = 'none';
         inp.style.cursor = 'pointer';
         inp.oninput = () => { node.params[p.id] = inp.value; this.scheduleSave(); };
-        body.appendChild(inp);
+        paramWrap.appendChild(inp);
       } else if (p.type === 'checkbox') {
         const wrap = document.createElement('label');
         wrap.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;margin-bottom:6px;';
@@ -946,23 +956,28 @@ class App {
         inp.checked = node.params[p.id] === true;
         inp.style.width = 'auto';
         inp.style.margin = '0';
-        inp.onchange = () => { node.params[p.id] = inp.checked; if (p.affectsPorts) this.rerenderNode(node); else this.renderConnections(); this.scheduleSave(); };
+        inp.onchange = () => {
+          node.params[p.id] = inp.checked;
+          if (p.affectsPorts) this.rerenderNode(node);
+          else this.syncParamControlStates(node, node.el.querySelector('.node-body'));
+          this.scheduleSave();
+        };
         wrap.appendChild(inp);
         wrap.appendChild(document.createTextNode(I18N.tn(p.label, p.labelEn)));
-        body.appendChild(wrap);
+        paramWrap.appendChild(wrap);
       } else if (p.type === 'routeChecks') {
-        this.renderRouteChecks(body, node, p);
+        this.renderRouteChecks(paramWrap, node, p);
       } else if (p.type === 'inputWeights') {
-        this.renderInputWeights(body, node, p);
+        this.renderInputWeights(paramWrap, node, p);
       } else if (p.type === 'portNames') {
-        this.renderPortNameInputs(body, node, p);
+        this.renderPortNameInputs(paramWrap, node, p);
       } else if (p.type === 'select') {
-        this.renderParamSelect(body, node, p);
+        this.renderParamSelect(paramWrap, node, p);
       } else if (p.type === 'info') {
         const div = document.createElement('div');
         div.style.cssText = 'font-size:10px;color:#888;padding:4px 0 6px;line-height:1.6;white-space:pre-line;word-break:break-all;overflow-wrap:break-word;max-width:220px;';
         div.innerHTML = I18N.tn(p.default, p.defaultEn);
-        body.appendChild(div);
+        paramWrap.appendChild(div);
       } else {
         const inp = document.createElement('input');
         inp.type = 'text';
@@ -973,7 +988,7 @@ class App {
           this.updateNodeTitle(node);
           this.scheduleSave();
         };
-        body.appendChild(inp);
+        paramWrap.appendChild(inp);
       }
     });
     this.syncParamControlStates(node, body);
@@ -1072,12 +1087,19 @@ class App {
 
   syncParamControlStates(node, body) {
     for (const p of node.def.params) {
-      const disabled = p.enabledWhen && node.params[p.enabledWhen.param] !== p.enabledWhen.value;
-      body.querySelectorAll(`[data-param-id="${p.id}"]`).forEach(control => {
-        control.disabled = disabled;
-        control.style.opacity = disabled ? '0.45' : '';
+      const hidden = p.enabledWhen && !this.isParamEnabled(node, p.enabledWhen);
+      body.querySelectorAll(`.param-field[data-param-id="${p.id}"]`).forEach(field => {
+        field.style.display = hidden ? 'none' : '';
       });
     }
+    this.updatePortPositions(node);
+    this.renderConnections();
+  }
+
+  isParamEnabled(node, condition) {
+    if (condition.all) return condition.all.every(item => this.isParamEnabled(node, item));
+    if (condition.values) return condition.values.includes(node.params[condition.param]);
+    return node.params[condition.param] === condition.value;
   }
 
   closeParamSelects(scope = document) {
@@ -1113,7 +1135,7 @@ class App {
         } else {
           button.textContent = I18N.tn(opt, optEn);
           menu.querySelectorAll('.param-select-option').forEach(option => option.classList.toggle('selected', option === item));
-          this.syncParamControlStates(node, body);
+          this.syncParamControlStates(node, node.el.querySelector('.node-body'));
         }
         this.scheduleSave();
       };
@@ -1122,7 +1144,6 @@ class App {
 
     button.onclick = (e) => {
       e.stopPropagation();
-      if (button.disabled) return;
       const wasOpen = wrap.classList.contains('open');
       this.closeParamSelects();
       wrap.classList.toggle('open', !wasOpen);
@@ -1312,6 +1333,7 @@ class App {
     const title = I18N.tn(node.def.title, node.def.titleEn);
     if (node._label) return `${node._label} ${id}`;
     if (node.type === 'input' && node.params.note) return `${title} - ${node.params.note} ${id}`;
+    if (node.type === 'variable' && node.params.name) return `${title} - ${node.params.name} ${id}`;
     if (node.type === 'probe' && node.params.name) return `${title} - ${node.params.name} ${id}`;
     if (node.type === 'csvoutput' && node.params.name) return `${title} - ${node.params.name} ${id}`;
     if (node.type === 'custom' && node.params.name) return `${node.params.name} ${id}`;
@@ -1942,6 +1964,11 @@ class App {
     return out;
   }
 
+  getNodeSampleRate(node, fallback = 1000) {
+    const value = Number(node?.params?.samplerate);
+    return value > 0 ? value : fallback;
+  }
+
   async executeNode(node, runOptions = {}) {
     if (this.nodeCache.has(node.id)) return;
     // Execute upstream first
@@ -1967,10 +1994,14 @@ class App {
     // ---- Special nodes with side effects handled in app.js ----
 
     if (node.type === 'input') {
-      this.sampleRate = node.params.samplerate || 1000;
       outputs['out'] = node._data ? [...node._data] : [];
     } else if (node.type === 'start') {
-      this.sampleRate = node.params.samplerate || 500;
+      this.sampleRate = this.getNodeSampleRate(node, 500);
+      ctx.sampleRate = this.sampleRate;
+      Object.assign(outputs, proc(getInput, node.params, ctx));
+    } else if (node.type === 'signalgen') {
+      this.sampleRate = this.getNodeSampleRate(node, this.sampleRate || 1000);
+      ctx.sampleRate = this.sampleRate;
       Object.assign(outputs, proc(getInput, node.params, ctx));
     } else if (node.type === 'custom') {
       const customInputs = this.getNodeInputs(node).reduce((map, port) => {
@@ -2020,7 +2051,17 @@ class App {
       if (!this.isInputBlocked(node, 'in') && node.params.enabled !== false) {
         const name = node._label || node.params.name || `示波器 #${node.id}`;
         const color = node.params.color || this.randomColor();
-        this.probeData.set(node.id, { title: name, data: outputs['out'], color, nodeId: node.id, axis: this.getSignalAxis(outputs['out']) });
+        const displayMode = node.params.displayMode === 'X-Y' ? 'X-Y' : 'Y-T';
+        const xData = displayMode === 'X-Y' ? this.getUpstreamData(node, 'x') : null;
+        this.probeData.set(node.id, {
+          title: name,
+          data: outputs['out'],
+          xData,
+          color,
+          nodeId: node.id,
+          axis: this.getSignalAxis(outputs['out']),
+          displayMode
+        });
       }
     } else {
       Object.assign(outputs, proc(getInput, node.params, ctx));
@@ -2171,10 +2212,10 @@ class App {
       this.nodeCache.clear();
       this.sampleRate = 1000;
 
-      // Valid source types: input (CSV), signalgen (signal generator), start (when enabled)
-      const isSource = (n) => n.type === 'input' || n.type === 'signalgen' || (n.type === 'start' && n.params.enabled !== false);
+      // Valid source types: input (CSV), signalgen (signal generator), variable, start (when enabled)
+      const isSource = (n) => n.type === 'input' || n.type === 'signalgen' || n.type === 'variable' || (n.type === 'start' && n.params.enabled !== false);
       const sources = this.nodes.filter(isSource);
-      if (sources.length === 0) { this.toast('请先添加输入节点、信号发生器或开始节点', 'error'); return; }
+      if (sources.length === 0) { this.toast('请先添加输入节点、信号发生器、变量或开始节点', 'error'); return; }
 
       // BFS from valid sources: builds both reachable set AND topological run order
       const reachable = new Set();
@@ -2230,7 +2271,7 @@ class App {
 
     for (const signal of inputSignals) {
       if (signal.data.length > 0) {
-        this.addChartItem(container, signal.title, signal.data, signal.color, signal.nodeId, signal.axis);
+        this.addChartItem(container, signal.title, signal.data, signal.color, signal.nodeId, signal.axis, true, signal.displayMode, signal.xData);
       }
     }
 
@@ -2245,7 +2286,7 @@ class App {
     }
     for (const probe of orderedProbes) {
       if (probe.data.length > 0) {
-        this.addChartItem(container, probe.title, probe.data, probe.color, probe.nodeId, probe.axis);
+        this.addChartItem(container, probe.title, probe.data, probe.color, probe.nodeId, probe.axis, true, probe.displayMode, probe.xData);
       }
     }
 
@@ -2299,7 +2340,7 @@ class App {
     this.scheduleSave();
   }
 
-  addChartItem(container, title, data, color, nodeId = null, axis = this.getSignalAxis(data), visible = true) {
+  addChartItem(container, title, data, color, nodeId = null, axis = this.getSignalAxis(data), visible = true, displayMode = 'Y-T', xData = null) {
     const item = document.createElement('div');
     item.className = 'chart-item';
     item.draggable = true;
@@ -2314,7 +2355,7 @@ class App {
     label.appendChild(dot);
     const name = document.createElement('span');
     name.className = 'chart-item-name';
-    name.textContent = `${title} (${data.length} 点)`;
+    name.textContent = displayMode === 'X-Y' ? `${title} (X-Y ${Math.min(data.length, xData?.length || 0)} 点)` : `${title} (${data.length} 点)`;
     name.title = '点击切换显示/隐藏';
     name.style.cursor = 'pointer';
     label.appendChild(name);
@@ -2333,7 +2374,7 @@ class App {
     canvas.style.display = resolvedVisible ? 'block' : 'none';
     readout.style.display = resolvedVisible ? '' : 'none';
     item.appendChild(canvas);
-    const chartItem = { title, data, color, canvas, nodeId, axis, readout, item, toggle, visibilityKey, visible: resolvedVisible };
+    const chartItem = { title, data, xData, color, canvas, nodeId, axis, readout, item, toggle, visibilityKey, visible: resolvedVisible, displayMode };
     item.classList.toggle('collapsed', !resolvedVisible);
     const doToggle = () => this.setChartItemVisible(chartItem, !chartItem.visible);
     toggle.onclick = (e) => { e.stopPropagation(); doToggle(); };
@@ -2568,7 +2609,8 @@ class App {
   redrawCharts() {
     for (const item of this.chartDataList) {
       if (item.visible === false) continue;
-      this.drawWaveform(item.canvas, item.data, item.color, item.axis);
+      if (item.displayMode === 'X-Y') this.drawXYPlot(item.canvas, item.xData || [], item.data, item.color);
+      else this.drawWaveform(item.canvas, item.data, item.color, item.axis);
       this.updateChartItemReadout(item);
     }
   }
@@ -2593,6 +2635,13 @@ class App {
 
   updateChartItemReadout(item) {
     if (!item.readout || !item.data.length) return;
+    if (item.displayMode === 'X-Y') {
+      const xData = item.xData || [];
+      const count = Math.min(xData.length, item.data.length);
+      if (!count) { item.readout.textContent = 'X-Y 无数据'; return; }
+      item.readout.textContent = `X-Y 轨迹  ${count} 点`;
+      return;
+    }
     if (this.cursorX < 0) {
       const start = this.getChartXValue(item.axis, 0, item.data.length);
       const end = this.getChartXValue(item.axis, item.data.length - 1, item.data.length);
@@ -2737,6 +2786,75 @@ class App {
       const labelX = this.cursorX + 8 > dw - 40 ? this.cursorX - 48 : this.cursorX + 8;
       ctx.fillText(`${this.formatChartX(axis, x)} ${v.toFixed(3)}`, labelX, y - 6);
     }
+  }
+
+  drawXYPlot(canvas, xData, yData, color) {
+    const dpr = window.devicePixelRatio || 1;
+    const dw = canvas.clientWidth;
+    const dh = canvas.clientHeight;
+    canvas.width = dw * dpr;
+    canvas.height = dh * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, dw, dh);
+
+    const count = Math.min(xData.length, yData.length);
+    if (!count) return;
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (let i = 0; i < count; i++) {
+      const x = xData[i], y = yData[i];
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+    }
+    if (minX === Infinity) return;
+    if (minX === maxX) { minX -= 1; maxX += 1; }
+    if (minY === maxY) { minY -= 1; maxY += 1; }
+
+    const pad = 14;
+    const xRange = maxX - minX;
+    const yRange = maxY - minY;
+    const toX = x => pad + ((x - minX) / xRange) * (dw - 2 * pad);
+    const toY = y => dh - pad - ((y - minY) / yRange) * (dh - 2 * pad);
+
+    ctx.strokeStyle = '#1b2838';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const x = pad + (i / 4) * (dw - 2 * pad);
+      const y = pad + (i / 4) * (dh - 2 * pad);
+      ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, dh - pad); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(dw - pad, y); ctx.stroke();
+    }
+
+    const zeroX = toX(0), zeroY = toY(0);
+    ctx.strokeStyle = '#2a3a4a';
+    ctx.setLineDash([4, 4]);
+    if (zeroX >= pad && zeroX <= dw - pad) { ctx.beginPath(); ctx.moveTo(zeroX, pad); ctx.lineTo(zeroX, dh - pad); ctx.stroke(); }
+    if (zeroY >= pad && zeroY <= dh - pad) { ctx.beginPath(); ctx.moveTo(pad, zeroY); ctx.lineTo(dw - pad, zeroY); ctx.stroke(); }
+    ctx.setLineDash([]);
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    let moved = false;
+    for (let i = 0; i < count; i++) {
+      const x = xData[i], y = yData[i];
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      const px = toX(x), py = toY(y);
+      if (!moved) { ctx.moveTo(px, py); moved = true; } else ctx.lineTo(px, py);
+    }
+    if (moved) ctx.stroke();
+
+    ctx.fillStyle = '#666';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Y ${maxY.toFixed(3)}`, 4, 14);
+    ctx.fillText(`Y ${minY.toFixed(3)}`, 4, dh - 4);
+    ctx.textAlign = 'right';
+    ctx.fillText(`X ${maxX.toFixed(3)}`, dw - 4, dh - 4);
+    ctx.textAlign = 'left';
+    ctx.fillText(`X ${minX.toFixed(3)}`, 4, dh - 4);
   }
 
   drawXAxisLabels(ctx, dw, dh, axis, iStart, iEnd, length) {

@@ -5,6 +5,9 @@
 tests/*
 !tests/connection_interactions.test.mjs
 !tests/demo.test.mjs
+!tests/param_visibility.test.mjs
+!tests/probe.test.mjs
 !tests/signalgen.test.mjs
+!tests/variable_node.test.mjs
 node_modules/
 dist/

@@ -9,7 +9,6 @@ export const def = {
   outputs: [{ id: 'out', label: '输出', labelEn: 'Output' }],
   params: [
     { id: 'note', label: '备注名', labelEn: 'Note', type: 'text', default: '' },
-    { id: 'samplerate', label: '采样率 (Hz)', labelEn: 'Sample Rate (Hz)', type: 'number', default: 1000 },
     { id: 'file', label: '波形数据', labelEn: 'Waveform Data', type: 'file' }
   ]
 };
