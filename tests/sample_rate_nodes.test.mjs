@@ -59,4 +59,10 @@ assert.deepEqual(
   'blank sample rate should follow the execution context'
 );
 
+assert.deepEqual(
+  bpmProcess(() => [4, -1, Number.NaN, 0, 2], { samplerate: 8 }, { sampleRate: 1000 }).out,
+  [120, 0, 0, 0, 240],
+  'invalid BPM intervals should output 0 instead of holding the previous valid value'
+);
+
 console.log('sample-rate node tests passed');
